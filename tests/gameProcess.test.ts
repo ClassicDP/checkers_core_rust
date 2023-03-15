@@ -4,7 +4,7 @@ import * as util from "util";
 import {Color, PositionEnvironment} from "../build-wasm/checkers_core";
 
 
-// https://github.com/ClassicDP/checkers_core#front-click-handler-1
+// https://github.com/ClassicDP/checkers_core_rust#front-click-handler-1
 describe("Game tests", () => {
     test("quite move", () => {
         let gameProcess = new GameProcess(8, Color.White);
@@ -55,7 +55,7 @@ describe("Game tests", () => {
         console.log(pos)
     });
 
-    // https://github.com/ClassicDP/checkers_core#front-click-handler
+    // https://github.com/ClassicDP/checkers_core_rust#front-click-handler
     test("king strike move applyFrontClick", () => {
         let gameProcess = new GameProcess(8, Color.White);
         gameProcess.insertPiece(47, Color.White, false)
@@ -99,7 +99,7 @@ describe("Game tests", () => {
         console.log(gameProcess.position.state)
     })
 
-    // https://github.com/ClassicDP/checkers_core#one-of-42-strike-variants
+    // https://github.com/ClassicDP/checkers_core_rust#one-of-42-strike-variants
     test("move variants Strike", () => {
         let gameProcess = new GameProcess(8);
         gameProcess.insertPiece(0, Color.White, true);
@@ -111,7 +111,7 @@ describe("Game tests", () => {
         expect(list.list.length).toEqual(42)
     })
 
-    // https://github.com/ClassicDP/checkers_core#strike-variants
+    // https://github.com/ClassicDP/checkers_core_rust#strike-variants
     test("move variants Strike simple to king and continue", () => {
         let gameProcess = new GameProcess(8);
         gameProcess.insertPiece(47, Color.White, false);
@@ -125,7 +125,7 @@ describe("Game tests", () => {
         expect(list.list.length).toEqual(5)
     })
 
-// https://github.com/ClassicDP/checkers_core#move-variants
+// https://github.com/ClassicDP/checkers_core_rust#move-variants
     test("move variants Quite move", () => {
         let gameProcess = new GameProcess(8)
         gameProcess.insertPiece(27, Color.White, true);
