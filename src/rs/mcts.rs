@@ -93,7 +93,7 @@ impl McTree {
                 node.borrow_mut().N += 1;
                 node.borrow_mut().expand();
                 let u = |child: &Node|
-                    1.4*f64::sqrt(f64::ln(node.borrow().N as f64) / (child.N as f64 + 1.0));
+                    2.0 * f64::sqrt(f64::ln(node.borrow().N as f64) / (child.N as f64 + 1.0));
                 let u_max = |child: &Node| child.W as f64 / (child.N as f64 + 1.0) + u(child);
                 let mut childs = node.borrow().childs.clone();
                 // for child in &node.borrow().childs {
@@ -109,18 +109,20 @@ impl McTree {
                                 if u_max(&*a.borrow()) < u_max(&*b.borrow())
                                 { Ordering::Less } else { Ordering::Greater });
                             let n_max = node.borrow().N;
-                            // if n_max > (5 * childs.len()) as i64 {
-                            //     let n_per_mov = n_max as i64 / childs.len() as i64;
-                            //     let mut new_ch = vec![];
-                            //     for child in &childs {
-                            //         if (n_per_mov as f64/ child.borrow().N as f64) < 1.3 {
-                            //             new_ch.push(child.clone());
-                            //         }
-                            //     }
-                            //     if new_ch.len() > 0 {
-                            //         childs = new_ch;
-                            //     }
-                            // }
+                            if n_max > (50 * childs.len()) as i64 {
+                                let c_max = node.borrow().childs.iter()
+                                    .max_by(|x, y| x.borrow().N.cmp(&y.borrow().N))
+                                    .unwrap().borrow().N;
+                                let mut new_ch = vec![];
+                                for child in &childs {
+                                    if (c_max as f64 / child.borrow().N as f64) < 1.5 {
+                                        new_ch.push(child.clone());
+                                    }
+                                }
+                                if new_ch.len() > 0 {
+                                    childs = new_ch;
+                                }
+                            }
                             node.borrow_mut().childs = childs;
                             node.borrow().childs.last().unwrap().clone()
                         }
@@ -150,7 +152,10 @@ impl McTree {
             pass += 1;
         }
         if self.root.borrow().childs.len() > 0 {
-           Some(self.root.borrow().childs.last().unwrap().clone())
+            let chs: Vec<_> =
+                self.root.borrow().childs.iter().map(|x| (x.borrow().W, x.borrow().N)).collect();
+            print!(" ch: {:?} \n", chs);
+            Some(self.root.borrow().childs.iter().max_by(|x, y| x.borrow().N.cmp(&y.borrow().N)).unwrap().clone())
         } else {
             None
         }
