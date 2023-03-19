@@ -76,21 +76,16 @@ impl McTree {
 
     fn root_search(&self, node: &Rc<RefCell<Node>>, mut max_deps: i16, deps: i16) -> Rc<RefCell<PositionAndMove>> {
         let color = node.borrow().pos_mov.borrow().pos.next_move.unwrap();
-        fn min_max_fn<T, F>(v: &[T], fun:F, color: Color ) -> Option<&T>
+        fn min_max_fn<T, F>(v: &[T], fun: F, color: Color) -> Option<&T>
             where
-            F: FnMut(&&T, &&T) -> Ordering
+                F: FnMut(&&T, &&T) -> Ordering
         {
-            if color == White { Iterator::max_by(v.iter(), fun) } else
-            { Iterator::max_by(v.iter(), fun) }
+            if color == White { Iterator::max_by(v.iter(), fun) } else { Iterator::max_by(v.iter(), fun) }
         }
 
-        fn vec_pos_move_min_max(l: &[Rc<RefCell<PositionAndMove>>], color: Color ) -> Option<&Rc<RefCell<PositionAndMove>>> {
+        fn vec_pos_move_min_max(l: &[Rc<RefCell<PositionAndMove>>], color: Color) -> Rc<RefCell<PositionAndMove>> {
             min_max_fn(l, |x: &&Rc<RefCell<PositionAndMove>>, y: &&Rc<RefCell<PositionAndMove>>|
-                x.borrow().pos.state.cmp(&y.borrow().pos.state), color ).clone()
-        }
-        fn vec_node_min_max(l: &[Rc<RefCell<Node>>], color: Color ) -> Option<&Rc<RefCell<Node>>> {
-            min_max_fn(l, |x: &&Rc<RefCell<Node>>, y: &&Rc<RefCell<Node>>|
-                x.borrow().pos_mov.borrow().pos.state.cmp(&y.borrow().pos_mov.borrow().pos.state), color ).clone()
+                x.borrow().pos.state.cmp(&y.borrow().pos.state), color).unwrap().clone()
         }
 
         if node.borrow().childs.len() == 0 { return node.borrow().pos_mov.clone(); }
@@ -98,19 +93,16 @@ impl McTree {
         let l0 = if l < 3 { 0 } else { l - 3 };
         if l < 2 { max_deps += 1; }
         let list = &node.borrow().childs[l0..l];
-
-
-
+        if deps < max_deps
+        {
             let list = &list.iter().map(|x|
-                self.root_search(x, max_deps, deps +1)).collect::<Vec<_>>();
-            vec_pos_move_min_max(list, color).unwrap().clone()
+                self.root_search(x, max_deps, deps + 1)).collect::<Vec<_>>();
+            vec_pos_move_min_max(list, color)
+        } else {
+            let list = &list.iter().map(|x| x.borrow().pos_mov.clone()).collect::<Vec<_>>();
+            vec_pos_move_min_max(list, color)
+        }
 
-        // else {
-        //     // let list = &list.iter().map(|x|
-        //     //     self.root_search(x, max_deps, deps +1)).collect::<Vec<_>>();
-        //     // vec_pos_move_min_max(list).unwrap().clone()
-        //     // vec_node_min_max(list).clone()
-        // }
     }
     pub fn search(&mut self, max_passes: i32) -> Option<Rc<RefCell<Node>>> {
         let mut track: Vec<Rc<RefCell<Node>>> = vec![];
