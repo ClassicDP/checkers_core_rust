@@ -1,16 +1,13 @@
 use std::cell::RefCell;
 use std::cmp::Ordering;
-use std::io;
-use std::io::Write;
-use std::ops::Deref;
 use std::rc::Rc;
-use crate::position::{Position, PosState};
+use crate::position::{Position};
 use crate::PositionHistory::{FinishType, PositionAndMove, PositionHistory};
 use rand::{Rng};
 use schemars::_private::NoSerialize;
 use crate::color;
 use crate::color::Color;
-use crate::color::Color::White;
+use crate::color::Color::{Black, White};
 use crate::moves_list::MoveItem;
 
 #[derive(Debug)]
@@ -74,7 +71,7 @@ impl McTree {
         }
     }
 
-    fn root_search(&self, node: &Rc<RefCell<Node>>, mut max_deps: i16, deps: i16) -> Rc<RefCell<PositionAndMove>> {
+    fn root_search(&self, node: &Rc<RefCell<Node>>, mut max_deps: i16, deps: i16) -> Rc<RefCell<Node>> {
         let color = node.borrow().pos_mov.borrow().pos.next_move.unwrap();
         fn min_max_fn<T, F>(v: &[T], fun: F, color: Color) -> Option<&T>
             where
@@ -83,26 +80,38 @@ impl McTree {
             if color == White { Iterator::max_by(v.iter(), fun) } else { Iterator::max_by(v.iter(), fun) }
         }
 
-        fn vec_pos_move_min_max(l: &[Rc<RefCell<PositionAndMove>>], color: Color) -> Rc<RefCell<PositionAndMove>> {
-            min_max_fn(l, |x: &&Rc<RefCell<PositionAndMove>>, y: &&Rc<RefCell<PositionAndMove>>|
-                x.borrow().pos.state.cmp(&y.borrow().pos.state), color).unwrap().clone()
+        fn vec_pos_move_min_max(l: &[Rc<RefCell<Node>>], color: Color) -> Rc<RefCell<Node>> {
+            min_max_fn(l, |x: &&Rc<RefCell<Node>>, y: &&Rc<RefCell<Node>>|
+                x.borrow().pos_mov.borrow().pos.state.cmp(
+                    &y.borrow().pos_mov.borrow().pos.state), color).unwrap().clone()
         }
 
-        if node.borrow().childs.len() == 0 { return node.borrow().pos_mov.clone(); }
+        if node.borrow().childs.len() == 0 {
+            // if deps==0 {println!("{:?} ", &node.borrow().pos_mov.borrow().mov);}
+            return node.clone();
+        }
         let l = node.borrow().childs.len();
-        let l0 = if l < 3 { 0 } else { l - 3 };
+        let l0 = if l <= 5 { 0 } else { l - 5 };
         if l < 2 { max_deps += 1; }
         let list = &node.borrow().childs[l0..l];
-        if deps < max_deps
-        {
-            let list = &list.iter().map(|x|
+        if deps < max_deps {
+            let list1 = &list.iter().map(|x|
                 self.root_search(x, max_deps, deps + 1)).collect::<Vec<_>>();
-            vec_pos_move_min_max(list, color)
+            if deps > 0 {
+                vec_pos_move_min_max(list1, color)
+            } else {
+                let node0 = vec_pos_move_min_max(list1, color);
+                let mut ind = 0;
+                for node in list1 {
+                    if node.as_ref().as_ptr() == node0.as_ref().as_ptr() { break; }
+                    ind += 1;
+                }
+                // println!("{:?} ", &list[ind].borrow().pos_mov.borrow().mov);
+                list[ind].clone()
+            }
         } else {
-            let list = &list.iter().map(|x| x.borrow().pos_mov.clone()).collect::<Vec<_>>();
             vec_pos_move_min_max(list, color)
         }
-
     }
     pub fn search(&mut self, max_passes: i32) -> Option<Rc<RefCell<Node>>> {
         let mut track: Vec<Rc<RefCell<Node>>> = vec![];
@@ -137,6 +146,7 @@ impl McTree {
                 //     if !child.borrow().passed_completely { childs.push(child.clone()); }
                 // }
                 if childs.len() > 0 {
+                    pass += 1;
                     node = {
                         let z_ch: Vec<_> = childs.iter().filter(|x| x.borrow().N == 0).collect();
                         if z_ch.len() > 0 {
@@ -146,13 +156,14 @@ impl McTree {
                                 if u_max(&*a.borrow()) < u_max(&*b.borrow())
                                 { Ordering::Less } else { Ordering::Greater });
                             let n_max = node.borrow().N;
-                            if n_max > (50 * childs.len()) as i64 {
+                            if n_max as f64 > 50.0 / f64::ln(track.len() as f64) * (childs.len() as f64) {
                                 let c_max = node.borrow().childs.iter()
-                                    .max_by(|x, y| u_max(&x.borrow()).total_cmp(&u_max(&y.borrow())))
+                                    .max_by(|x, y|
+                                        u_max(&x.borrow()).total_cmp(&u_max(&y.borrow())))
                                     .unwrap().borrow().N;
                                 let mut new_ch = vec![];
                                 for child in &childs {
-                                    if (c_max as f64 / child.borrow().N as f64) < 5.0 {
+                                    if (c_max as f64 / child.borrow().N as f64) < 4.5 {
                                         new_ch.push(child.clone());
                                     }
                                 }
@@ -186,14 +197,14 @@ impl McTree {
                     break;
                 }
             }
-            pass += 1;
         }
         if self.root.borrow().childs.len() > 0 {
-            let chs: Vec<_> =
-                self.root.borrow().childs.iter().map(|x| (x.borrow().W, x.borrow().N)).collect();
+            // let chs: Vec<_> =
+            //     self.root.borrow().childs.iter().map(|x| (x.borrow().W, x.borrow().N)).collect();
             // print!(" ch: {:?} \n", chs);
-            // Some(self.root.borrow().childs.iter().max_by(|x, y| x.borrow().N.cmp(&y.borrow().N)).unwrap().clone())
-            Some(self.root.borrow().childs.last().unwrap().clone())
+            Some(self.root.borrow().childs.iter().max_by(|x, y| x.borrow().N.cmp(&y.borrow().N)).unwrap().clone())
+            // Some(self.root.borrow().childs.last().unwrap().clone())
+            // Some(self.root_search(&self.root, 10, 0))
         } else {
             None
         }

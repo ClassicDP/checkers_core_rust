@@ -1,5 +1,6 @@
 use std::io;
 use std::io::Write;
+use std::ops::Deref;
 use rand::{Rng, thread_rng};
 use crate::color::Color;
 use crate::color::Color::Black;
@@ -59,14 +60,22 @@ pub fn random_game_test() {
 
 pub fn best_move_triangle() {
     let mut game = Game::new(8);
-    game.set_depth(4);
-    game.current_position.next_move = Some(Color::Black);
+    game.set_depth(5);
+    // game.current_position.next_move = Some(Color::Black);
+    // vec![31].iter()
+    //     .for_each(|pos|
+    //         game.insert_piece(Piece::new(game.to_pack(*pos), Color::White, true)));
+    // vec![43, 36, 20].iter()
+    //     .for_each(|pos|
+    //         game.insert_piece(Piece::new(game.to_pack(*pos), Color::Black, true)));
+
     vec! [0, 2, 4, 6, 9, 11, 13, 15, 16, 18, 20, 22].iter()
         .for_each(|pos|
             game.insert_piece(Piece::new(game.to_pack(*pos), Color::White, false)));
     vec! [0, 2, 4, 6, 9, 11, 13, 15, 16, 18, 20, 22].iter().map(|x|63-x).collect::<Vec<_>>().iter()
         .for_each(|pos|
             game.insert_piece(Piece::new(game.to_pack(*pos), Color::Black, false)));
+    game.current_position.next_move = Option::from(Color::White);
     // game.current_position.next_move = Some(Color::Black);
     // vec![52, 54, 38, 63].iter()
     //     .for_each(|pos|
@@ -75,14 +84,14 @@ pub fn best_move_triangle() {
     //     .for_each(|pos|
     //         game.insert_piece(Piece::new(game.to_pack(*pos), Color::White, true)));
 
-    game.current_position.next_move = Option::from(Color::White);
+
     // game.position_history.borrow_mut().push(PositionAndMove::from_pos(game.current_position));
     game.tree = Some(McTree::new(game.current_position.clone(), game.position_history.clone()));
 
     loop {
         game.tree = Some(McTree::new(game.current_position.clone(), game.position_history.clone()));
         if let Some(ref mut tree) = game.tree {
-            let node = tree.search(10_000);
+            let node = tree.search(150_000);
             if node.is_none() { print!("deeps win"); break; }
             let mov = node.unwrap().borrow().get_move().unwrap().clone();
             // print!("{:?}\n", &mov);
@@ -100,6 +109,7 @@ pub fn best_move_triangle() {
             }
         }
     }
+    print!("{:?}\n", &game.position_history.borrow_mut().last().borrow().pos.state);
 
     return;
     let mut game = Game::new(8);
