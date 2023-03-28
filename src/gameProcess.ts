@@ -71,8 +71,8 @@ export class GameProcess {
         this.game.make_best_move(pos)
     }
 
-    getBestMove() {
-        let best = this.game.get_best_move() as BestPos
+    getOrApplyBestMove(apply: boolean) {
+        let best = this.game.get_or_apply_best_move(apply) as BestPos
         if (best.pos?.mov) {
             let x = best.pos.mov;
             if (x.mov)

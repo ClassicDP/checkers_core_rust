@@ -106,7 +106,7 @@ describe("Game tests", () => {
         [9, 11, 13, 25, 27, 29, 41, 43, 45].forEach(i => gameProcess.insertPiece(i, Color.Black, false));
         let list = gameProcess.getMoveList(Color.White) as MoveList;
         gameProcess.moveColor = Color.White
-        console.log(util.inspect(gameProcess.getBestMove(), {depth: null, colors: true}))
+        console.log(util.inspect(gameProcess.getOrApplyBestMove(false), {depth: null, colors: true}))
         console.log(list.list.map(x => x.strike!.vec))
         expect(list.list.length).toEqual(42)
     })
@@ -143,7 +143,7 @@ describe("Game tests", () => {
         gameProcess.moveColor = Color.Black;
         let move;
         do {
-            move = gameProcess.getBestMove();
+            move = gameProcess.getOrApplyBestMove(false)
             console.log(move)
             if (move.pos) {
                 let x = gameProcess.get_best_move();

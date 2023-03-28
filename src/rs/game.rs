@@ -1,23 +1,18 @@
-use std::cell::{Ref, RefCell};
-use std::cmp::{min, Ordering};
-use std::io;
-use std::io::Write;
+use std::cell::{RefCell};
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use crate::color::Color;
 use crate::moves::BoardPos;
 use crate::moves_list::{MoveItem, MoveList};
 use crate::piece::Piece;
-use crate::position::{Position, PosState};
+use crate::position::{Position};
 use crate::position_environment::PositionEnvironment;
 use ts_rs::*;
 use serde::Serialize;
 use crate::color::Color::{Black, White};
 use crate::PositionHistory::FinishType::{BlackWin, Draw1, Draw2, Draw3, Draw4, Draw5, WhiteWin};
-use crate::log;
-use rand::prelude::*;
 use crate::mcts::McTree;
-use crate::PositionHistory::{FinishType, PositionAndMove, PositionHistory};
+use crate::PositionHistory::{PositionAndMove, PositionHistory};
 
 #[wasm_bindgen]
 #[derive(Serialize, Debug)]
@@ -183,7 +178,7 @@ impl Game {
     }
 
     #[wasm_bindgen]
-    pub fn get_best_move(&mut self) -> JsValue {
+    pub fn get_or_apply_best_move(&mut self, apply: bool) -> JsValue {
         let finish = self.position_history.borrow_mut().finish_check();
         if finish.is_some() {
             return match serde_wasm_bindgen::to_value(&finish.unwrap()) {
@@ -191,6 +186,8 @@ impl Game {
                 Err(_err) => JsValue::UNDEFINED
             };
         }
+        let best_move = self.best_move(self.max_depth, i32::MIN, i32::MAX, 0);
+        if apply { self.make_best_move(&best_move) }
         match serde_wasm_bindgen::to_value(
             &self.best_move(self.max_depth, i32::MIN, i32::MAX, 0)) {
             Ok(js) => js,
