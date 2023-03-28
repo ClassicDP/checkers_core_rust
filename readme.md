@@ -1,5 +1,5 @@
 test:
-https://github.com/ClassicDP/checkers_core/blob/master/tests/gameProcess.test.ts
+https://github.com/ClassicDP/checkers_core_rust/blob/master/tests/gameProcess.test.ts
 
 NPM:
 

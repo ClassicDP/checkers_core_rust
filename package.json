@@ -1,6 +1,6 @@
 {
   "name": "checkers_core",
-  "version": "1.0.22",
+  "version": "1.0.25",
   "main": "./build-js/gameProcess.js",
   "types": "./build-js/gameProcess.d.ts",
   "files": ["build-js/**/*", "build-wasm/**/*", "img"],
@@ -11,14 +11,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ClassicDP/checkers_core.git"
+    "url": "git+https://github.com/ClassicDP/checkers_core_rust.git"
   },
   "author": "",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/ClassicDP/checkers_core/issues"
+    "url": "https://github.com/ClassicDP/checkers_core_rust/issues"
   },
-  "homepage": "https://github.com/ClassicDP/checkers_core#readme",
+  "homepage": "https://github.com/ClassicDP/checkers_core_rust#readme",
   "description": "<img height=\"300\" src=\"./img/1.png\" width=\"300\"/>",
   "devDependencies": {
     "@types/jest": "^29.4.0",

@@ -7,5 +7,5 @@ export interface PosState {
     triangle_start_at: number | null;
     power_equal_start_at: number | null;
     main_road_start_at: number | null;
-    repeats: number | null;
+    repeats: number;
 }
