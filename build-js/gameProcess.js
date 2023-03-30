@@ -63,8 +63,8 @@ class GameProcess {
     make_best_move(pos) {
         this.game.make_best_move(pos);
     }
-    getBestMove() {
-        let best = this.game.get_best_move();
+    getOrApplyBestMove(apply) {
+        let best = this.game.get_or_apply_best_move(apply);
         if (best.pos?.mov) {
             let x = best.pos.mov;
             if (x.mov)
@@ -75,16 +75,15 @@ class GameProcess {
                 };
         }
         if (best.pos?.mov?.strike) {
-            let x = best.pos.mov.strike;
-            x = {
-                vec: x.vec.map(it => ({
+            best.pos.mov.strike = {
+                vec: best.pos.mov.strike.vec.map(it => ({
                     king_move: it.king_move,
                     from: this.game.to_board(it.from),
                     to: this.game.to_board(it.to),
                     take: this.game.to_board(it.take),
                     v: it.v
                 })),
-                king_move: x.king_move
+                king_move: best.pos.mov.strike.king_move
             };
         }
         return best;

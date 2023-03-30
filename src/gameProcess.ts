@@ -1,5 +1,5 @@
 import * as wasm from "../build-wasm/checkers_core"
-import {Color} from "../build-wasm/checkers_core"
+import {Color} from "../build-wasm"
 import {Position} from "./bindings/Position";
 import {ColorType} from "./bindings/ColorType";
 import {MoveList} from "./bindings/MoveList";
@@ -83,16 +83,15 @@ export class GameProcess {
                 }
         }
         if (best.pos?.mov?.strike) {
-            let x = best.pos.mov.strike;
-            x = <Strike>{
-                vec: x.vec.map(it => <StraightStrike>{
+            best.pos.mov.strike = <Strike>{
+                vec: best.pos.mov.strike.vec.map(it => <StraightStrike>{
                     king_move: it.king_move,
                     from: this.game.to_board(it.from),
                     to: this.game.to_board(it.to),
                     take: this.game.to_board(it.take),
                     v: it.v
                 }),
-                king_move: x.king_move
+                king_move: best.pos.mov.strike.king_move
             }
         }
         return best

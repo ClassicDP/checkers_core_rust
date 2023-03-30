@@ -12,11 +12,11 @@ use crate::moves_list::MoveItem;
 
 #[derive(Debug)]
 pub struct Node {
-    W: i64,
-    N: i64,
+    pub W: i64,
+    pub N: i64,
     passed_completely: bool,
     pos_mov: Rc<RefCell<PositionAndMove>>,
-    childs: Vec<Rc<RefCell<Node>>>,
+    pub childs: Vec<Rc<RefCell<Node>>>,
 }
 
 impl Node {
@@ -41,6 +41,9 @@ impl Node {
     }
     pub fn get_move(&self) -> Option<MoveItem> {
         self.pos_mov.borrow().mov.clone()
+    }
+    pub fn get_pos_mov(&self) -> Rc<RefCell<PositionAndMove>> {
+        self.pos_mov.clone()
     }
 }
 
@@ -134,7 +137,7 @@ impl McTree {
                 node.borrow_mut().N += 1;
                 node.borrow_mut().expand();
                 let u = |child: &Node|
-                    2.0 * f64::sqrt(f64::ln(node.borrow().N as f64) / (child.N as f64 + 1.0));
+                    1.4 * f64::sqrt(f64::ln(node.borrow().N as f64) / (child.N as f64 + 1.0));
                 let u_max = |child: &Node| {
                     child.W as f64 / (child.N as f64 + 1.0) + u(child) + {
                         0.0
@@ -156,7 +159,7 @@ impl McTree {
                                 if u_max(&*a.borrow()) < u_max(&*b.borrow())
                                 { Ordering::Less } else { Ordering::Greater });
                             let n_max = node.borrow().N;
-                            if n_max as f64 > 50.0 / f64::ln(track.len() as f64) * (childs.len() as f64) {
+                            if n_max as f64 > 500000.0 / f64::ln(track.len() as f64) * (childs.len() as f64) {
                                 let c_max = node.borrow().childs.iter()
                                     .max_by(|x, y|
                                         u_max(&x.borrow()).total_cmp(&u_max(&y.borrow())))
@@ -208,5 +211,13 @@ impl McTree {
         } else {
             None
         }
+    }
+
+    pub fn root_map(&self) -> Vec<i64> {
+        self.root.borrow().childs.iter().map(|x|x.borrow().N).collect::<Vec<_>>()
+    }
+
+    pub fn tree_childs(&self) -> Vec<Rc<RefCell<Node>>> {
+        self.root.borrow().childs.clone()
     }
 }

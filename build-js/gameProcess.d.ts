@@ -31,7 +31,7 @@ export declare class GameProcess {
     removePiece(pos: number): boolean;
     get_best_move(): wasm.BestPos;
     make_best_move(pos: any): void;
-    getBestMove(): BestPos;
+    getOrApplyBestMove(apply: boolean): BestPos;
     get position(): Position;
     private frontClick;
     getMoveList(color?: Color): MoveList;

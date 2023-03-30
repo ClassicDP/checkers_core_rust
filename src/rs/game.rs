@@ -11,7 +11,7 @@ use ts_rs::*;
 use serde::Serialize;
 use crate::color::Color::{Black, White};
 use crate::PositionHistory::FinishType::{BlackWin, Draw1, Draw2, Draw3, Draw4, Draw5, WhiteWin};
-use crate::mcts::McTree;
+use crate::mcts::{McTree, Node};
 use crate::PositionHistory::{PositionAndMove, PositionHistory};
 
 #[wasm_bindgen]
@@ -189,7 +189,7 @@ impl Game {
         let best_move = self.best_move(self.max_depth, i32::MIN, i32::MAX, 0);
         if apply { self.make_best_move(&best_move) }
         match serde_wasm_bindgen::to_value(
-            &self.best_move(self.max_depth, i32::MIN, i32::MAX, 0)) {
+            &best_move) {
             Ok(js) => js,
             Err(_err) => JsValue::UNDEFINED
         }
@@ -218,6 +218,7 @@ impl Game {
                         (if piece.is_king { 3 } else { 1 }) * if piece.color == Color::White { 1 } else { -1 }
                 }
             }
+            // board.push(pos.pos.evaluate());
             board_list.push(board);
         }
         board_list
@@ -246,6 +247,65 @@ impl Game {
             Err(_err) => JsValue::UNDEFINED
         };
     }
+
+    #[wasm_bindgen]
+    pub fn find_mcts_and_make_best_move_ts_n(&mut self) -> JsValue {
+        let finish = self.position_history.borrow_mut().finish_check();
+        if finish.is_some() {
+            return match serde_wasm_bindgen::to_value(&finish.unwrap()) {
+                Ok(js) => js,
+                Err(_err) => JsValue::UNDEFINED
+            };
+        }
+
+        if self.tree.is_none() {
+            self.tree = Some(McTree::new(self.current_position.clone(), self.position_history.clone()));
+        }
+
+        if let Some(new_node) =
+            self.tree.as_mut().unwrap().tree_childs().iter().find(|x| x.borrow().get_pos_mov().borrow().pos
+                == self.current_position) {
+            self.tree = Option::from(McTree::new_from_node(new_node.clone(), self.position_history.clone()));
+        }
+
+
+        let node = self.tree.as_mut().unwrap().search(200_000);
+        let mov = &node.clone().unwrap().borrow().get_move().unwrap().clone();
+        self.make_move_by_move_item(mov);
+
+        let finish = self.position_history.borrow_mut().finish_check();
+        if finish.is_some() {
+            return match serde_wasm_bindgen::to_value(&finish.unwrap()) {
+                Ok(js) => js,
+                Err(_err) => JsValue::UNDEFINED
+            };
+        }
+        let childs = node.unwrap().borrow().childs.clone();
+
+        let mut n_max =
+            childs.iter().max_by(|x,y|x.borrow().N.cmp(&y.borrow().N)).unwrap().borrow().N as i32;
+        if childs.len() == 1 { n_max *= 2; }
+        let mut board_list: Vec<Vec<i32>> = vec![];
+        for child  in childs {
+            let mut board = vec![0 as i32; (self.position_environment.size * self.position_environment.size / 2) as usize];
+            for cell in &child.borrow().get_pos_mov().borrow().pos.cells {
+                if let Some(piece) = cell {
+                    board[piece.pos] =
+                        (if piece.is_king { 3 } else { 1 }) * if piece.color == Color::White { 1 } else { -1 }
+                }
+            }
+            board.push(child.borrow().N as i32);
+            board.push(n_max);
+            board_list.push(board);
+
+        }
+        return match serde_wasm_bindgen::to_value(&board_list) {
+            Ok(js) => js,
+            Err(_err) => JsValue::UNDEFINED
+        };
+    }
+
+
     #[wasm_bindgen]
     pub fn get_board_list_ts_n(&mut self) -> JsValue {
         return match serde_wasm_bindgen::to_value(&self.get_board_list()) {
