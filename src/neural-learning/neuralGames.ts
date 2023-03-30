@@ -1,5 +1,5 @@
-import {BestPos, Color} from "../build-wasm";
-import {GameProcess} from "../src/gameProcess";
+import {BestPos, Color} from "../../build-wasm";
+import {GameProcess} from "../gameProcess";
 
 type ListOrFinish = Array<number>[] | 'BlackWin' | 'WhiteWin' | `Draw${number}`
 let listOrFinish: ListOrFinish
@@ -12,7 +12,7 @@ do {
         }
     }
     let gameProcess = new GameProcess(8)
-    gameProcess.game.set_depth(3) // <-- depth limit
+    gameProcess.game.set_mcts_lim(10000) // <-- mcts limit
     let whitePosList = [0, 2, 4, 6, 9, 11, 13, 15, 16, 18, 20, 22]
     let blackPosList = whitePosList.map(x => 63 - x)
     whitePosList.forEach(x => gameProcess.insertPiece(x, Color.White, false))
@@ -31,7 +31,7 @@ do {
         console.log("neural play Black")
     }
     do {
-        listOrFinish = gameProcess.game.find_and_make_best_move_ts_n()
+        listOrFinish = gameProcess.game.find_mcts_and_make_best_move_ts_n()
         movesCount++ // todo result may have +1 count mistake in case Deep algorithm lost
         if (listOrFinish instanceof Array) {
             selectPosition(listOrFinish)

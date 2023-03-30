@@ -7,6 +7,7 @@ use serde::Serialize;
 use std::cmp::Ordering;
 use std::rc::Rc;
 use crate::color::Color::{Black, White};
+use crate::log;
 use crate::PositionHistory::FinishType::{BlackWin, Draw1, Draw2, Draw3, Draw4, Draw5, WhiteWin};
 
 #[wasm_bindgen]
@@ -79,7 +80,7 @@ impl PositionHistory {
         let pos_history = &self.list;
         let ref mut current = &pos_history[i - 1];
         let list = current.borrow_mut().pos.get_move_list_cached();
-
+        // log(&format!(" {:?} ", list.as_ref().as_ref().unwrap().list.len()));
         if list.as_ref().as_ref().unwrap().list.len() == 0 {
             return if current.borrow().pos.next_move.is_some() &&
                 current.borrow().pos.next_move.unwrap() == White { Some(BlackWin) } else { Some(WhiteWin) };
