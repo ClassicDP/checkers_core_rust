@@ -25,6 +25,17 @@ describe("Game tests", () => {
         expect(move!.confirmed!.from).toEqual(63)
         expect(move!.confirmed!.to).toEqual(54)
     });
+    test("kill back", () => {
+        let gameProcess = new GameProcess(8, Color.White);
+        gameProcess.insertPiece(16, Color.White, false)
+        gameProcess.insertPiece(25, Color.Black, false)
+        gameProcess.insertPiece(20, Color.White, false)
+        gameProcess.insertPiece(27, Color.Black, false)
+        let mov = gameProcess.applyFrontClick(16)
+        console.log(mov)
+        mov = gameProcess.applyFrontClick(34)
+        console.log(mov)
+    })
     test("quite move black", () => {
         let gameProcess = new GameProcess(8, Color.White);
         gameProcess.invertMoveColor();

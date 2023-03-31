@@ -151,6 +151,10 @@ export class GameProcess {
             this.moveList = <MoveList>this.game.get_move_list_for_front()
             if (this.isQuiteMoveList()) {
                 this.moveList.list = this.moveList.list.filter(x => x.mov?.from == this.game.to_pack(pos))
+            } else {
+                if (this.strikeChainInd == 0) {
+                    this.moveList.list = this.moveList.list.filter(x => x.strike?.vec[0].from == this.game.to_pack(pos))
+                }
             }
         }
         let moveItems = getMoveChainElements(this.moveList, this.strikeChainInd)

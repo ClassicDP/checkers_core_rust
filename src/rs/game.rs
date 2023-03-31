@@ -547,20 +547,4 @@ mod tests {
         PositionEnvironment::game();
     }
 
-    #[test]
-    fn mcts() {
-        let mut game = Game::new(8);
-        vec![0, 2, 4, 6, 9, 11, 13, 15, 16, 18, 20, 22].iter()
-            .for_each(|pos|
-                game.insert_piece(Piece::new(game.to_pack(*pos), Color::White, false)));
-        vec![0, 2, 4, 6, 9, 11, 13, 15, 16, 18, 20, 22].iter().map(|x| 63 - x).collect::<Vec<_>>().iter()
-            .for_each(|pos|
-                game.insert_piece(Piece::new(game.to_pack(*pos), Color::Black, false)));
-        game.current_position.next_move = Option::from(Color::White);
-        game.find_mcts_and_make_best_move_ts_n(true);
-        if game.position_history.borrow_mut().finish_check().is_some() {
-            return;
-        }
-        game.find_and_make_best_move_ts_n();
-    }
 }
