@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-const build_wasm_1 = require("../../build-wasm");
+const checkers_core_1 = require("../../build-wasm/checkers_core");
 const gameProcess_1 = require("../gameProcess");
 let listOrFinish;
 do {
@@ -13,9 +13,9 @@ do {
     gameProcess.game.set_mcts_lim(10000); // <-- mcts limit
     let whitePosList = [0, 2, 4, 6, 9, 11, 13, 15, 16, 18, 20, 22];
     let blackPosList = whitePosList.map(x => 63 - x);
-    whitePosList.forEach(x => gameProcess.insertPiece(x, build_wasm_1.Color.White, false));
-    blackPosList.forEach(x => gameProcess.insertPiece(x, build_wasm_1.Color.Black, false));
-    gameProcess.moveColor = build_wasm_1.Color.White;
+    whitePosList.forEach(x => gameProcess.insertPiece(x, checkers_core_1.Color.White, false));
+    blackPosList.forEach(x => gameProcess.insertPiece(x, checkers_core_1.Color.Black, false));
+    gameProcess.moveColor = checkers_core_1.Color.White;
     let movesCount = 0;
     let neuralMakeFirstMove = Math.random() < 0.5;
     if (neuralMakeFirstMove) {

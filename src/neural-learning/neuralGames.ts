@@ -1,4 +1,4 @@
-import {BestPos, Color} from "../../build-wasm";
+import {Color} from "../../build-wasm/checkers_core"
 import {GameProcess} from "../gameProcess";
 
 type ListOrFinish = Array<number>[] | 'BlackWin' | 'WhiteWin' | `Draw${number}`
