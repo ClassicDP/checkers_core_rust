@@ -8,7 +8,7 @@ let listOrFinish: ListOrFinish
 do {
     const selectPosition = (listOrFinish: ListOrFinish) => {
         if (listOrFinish.length) {
-            gameProcess.game.move_by_index_ts_n(Math.random() * listOrFinish.length >> 0)
+            gameProcess.game.move_by_tree_index_ts_n(Math.random() * listOrFinish.length >> 0)
         }
     }
     let gameProcess = new GameProcess(8)
@@ -21,7 +21,7 @@ do {
     let movesCount = 0
     let neuralMakeFirstMove = Math.random() < 0.5
     if (neuralMakeFirstMove) {
-        listOrFinish = gameProcess.game.get_board_list_ts_n()
+        listOrFinish = gameProcess.game.find_mcts_and_make_best_move_ts_n(false)
         if (listOrFinish instanceof Array) {
             selectPosition(listOrFinish)
             movesCount++
@@ -31,7 +31,7 @@ do {
         console.log("neural play Black")
     }
     do {
-        listOrFinish = gameProcess.game.find_mcts_and_make_best_move_ts_n()
+        listOrFinish = gameProcess.game.find_mcts_and_make_best_move_ts_n(true)
         movesCount++ // todo result may have +1 count mistake in case Deep algorithm lost
         if (listOrFinish instanceof Array) {
             selectPosition(listOrFinish)
