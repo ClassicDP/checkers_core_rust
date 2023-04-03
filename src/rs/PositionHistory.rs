@@ -8,6 +8,7 @@ use std::cmp::Ordering;
 use std::rc::Rc;
 use crate::color::Color::{Black, White};
 use crate::log;
+use crate::piece::Piece;
 use crate::PositionHistory::FinishType::{BlackWin, Draw1, Draw2, Draw3, Draw4, Draw5, WhiteWin};
 
 #[wasm_bindgen]
@@ -34,10 +35,14 @@ impl PositionAndMove {
             mov: None,
         }
     }
+
+    pub fn move_piece(&self) -> &Option<Piece> {
+        &self.pos.cells[self.mov.as_ref().unwrap().to()]
+    }
 }
 #[derive(Debug)]
 pub struct PositionHistory {
-    list: Vec<Rc<RefCell<PositionAndMove>>>,
+    pub list: Vec<Rc<RefCell<PositionAndMove>>>,
 }
 
 impl PositionHistory {
@@ -56,6 +61,7 @@ impl PositionHistory {
     pub fn last(&mut self) -> Rc<RefCell<PositionAndMove>> {
         self.list.last().unwrap().clone()
     }
+
 
     pub fn cut_to (&mut self, to: usize) {
         self.list = self.list[0..to].to_owned();

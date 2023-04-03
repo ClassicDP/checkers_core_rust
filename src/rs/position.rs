@@ -74,8 +74,8 @@ impl PosState {
     }
 
     pub fn evaluate(&self) -> i32 {
-        self.white.simple as i32 * 1000 + self.white.king as i32 * 3000
-            - self.black.simple as i32 * 1000 - self.black.king as i32 * 3000
+        self.white.simple as i32 * 10000 + self.white.king as i32 * 30000
+            - self.black.simple as i32 * 10000 - self.black.king as i32 * 30000
     }
 }
 
@@ -329,12 +329,29 @@ impl Position {
         for cell in &self.cells {
             if let Some(ref piece) = cell {
                 let v = self.get_vectors(piece, &vec![], false);
-                let s: i32 = if piece.color == Color::White { 1 } else { -1 };
-                v.iter().for_each(|v|
-                    for point in &(v.points)[1..] {
-                        if self.cells[*point].is_some() { break; }
-                        eval += s;
-                    })
+                let empir = rand::thread_rng().gen_range(9..10);
+                let s = if piece.color == Color::White { empir } else { -empir };
+                if !piece.is_king {
+                    // let row = (piece.pos * 2 / self.environment.size as usize) as i32;
+                    // let progress = if piece.color == Color::White { row } else { row - self.environment.size as i32 };
+                    // eval += progress;
+                    v.iter().for_each(|v|
+                        {
+                            for point in &(v.points)[1..usize::min(3, v.points.len())] {
+                                if let Some(neighbour) = &self.cells[*point] {
+                                    if neighbour.color == piece.color { eval += s as i32; } else { break; }
+                                }
+                            }
+                            // opposition
+                            if v.points.len() > 1 && self.cells[v.points[1]].is_none() {
+                                eval += s * 2;
+                            }
+                        })
+                }
+                // for point in &(v.points)[1..] {
+                //     if self.cells[*point].is_some() { break; }
+                //     eval += s as i32;
+                // })
             }
         }
         eval += self.state.evaluate();

@@ -118,6 +118,28 @@ impl Game {
         if pos_list.len() == 0 { panic!("Best move: it`s standoff position") }
         let move_color = self.current_position.next_move.unwrap();
         if pos_list.len() < 3 { max_depth += 1; }
+        else {
+            // if piece move after midl of board
+            if self.position_history.borrow().len() > 1 {
+                let move_to = self.position_history.borrow_mut().last().borrow().mov.as_ref().unwrap().to();
+                // let piece = self.position_history.borrow().last().borrow().move_piece().clone();
+                // if !piece.unwrap().is_king {
+                //     let to_row =
+                //         (move_to * 2 /
+                //             self.position_environment.size as usize) as i32
+                //             - self.position_environment.size as i32 / 2;
+                //     if (self.current_position.next_move.unwrap() == White && to_row < 0) ||
+                //         (self.current_position.next_move.unwrap() == Black && to_row > 0) {
+                //         let piece_prev = self.position_history.borrow()
+                //                 .list[self.position_history.borrow().list.len()-2].borrow().move_piece();
+                //         if piece == piece_prev {
+                //             max_depth += 1;
+                //         }
+                //     }
+                // }
+            }
+        }
+
         // if pos_list.len() < 3 { max_depth += 1; } else {
         //     let mut rng = rand::thread_rng();
         //     let y: f64 = rng.gen();
@@ -148,7 +170,7 @@ impl Game {
                 }
                 let deep_eval =
                     self.best_move(max_depth, best_white, best_black, depth + 1).deep_eval;
-                let mut pos_it = self.position_history.borrow_mut().pop().unwrap();
+                let pos_it = self.position_history.borrow_mut().pop().unwrap();
                 self.current_position.took_pieces = pos_it.borrow().pos.took_pieces.clone();
                 self.current_position.unmake_move(&pos_it.borrow().mov.as_ref().unwrap());
                 let white = self.current_position.state.white.clone();
@@ -314,7 +336,7 @@ impl Game {
         }
 
         return match serde_wasm_bindgen::to_value(&board_list) {
-            Ok(js) => { js },
+            Ok(js) => { js }
             Err(_err) => JsValue::UNDEFINED
         };
     }
@@ -546,5 +568,4 @@ mod tests {
     fn performance() {
         PositionEnvironment::game();
     }
-
 }

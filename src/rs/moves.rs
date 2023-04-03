@@ -13,6 +13,8 @@ pub type BoardPos = usize;
 #[derive(Clone, Serialize, Deserialize, TS)]
 #[wasm_bindgen]
 #[ts(export)]
+#[ts(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase")]
 pub struct StraightStrike {
     pub(crate) v: Vec<BoardPos>,
     pub(crate) from: BoardPos,
@@ -62,6 +64,8 @@ impl <'a> IntoIterator for &'a StraightStrike {
 #[derive(Tsify)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 #[ts(export)]
+#[ts(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase")]
 pub struct QuietMove {
     pub from: BoardPos,
     pub to: BoardPos,

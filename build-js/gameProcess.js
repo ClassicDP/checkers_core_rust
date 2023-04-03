@@ -71,19 +71,19 @@ class GameProcess {
                 x.mov = {
                     from: this.game.to_board(x.mov.from),
                     to: this.game.to_board(x.mov.to),
-                    king_move: x.mov.king_move
+                    kingMove: x.mov.kingMove
                 };
         }
         if (best.pos?.mov?.strike) {
             best.pos.mov.strike = {
                 vec: best.pos.mov.strike.vec.map(it => ({
-                    king_move: it.king_move,
+                    kingMove: it.kingMove,
                     from: this.game.to_board(it.from),
                     to: this.game.to_board(it.to),
                     take: this.game.to_board(it.take),
                     v: it.v
                 })),
-                king_move: best.pos.mov.strike.king_move
+                kingMove: best.pos.mov.strike.kingMove
             };
         }
         return best;
@@ -114,14 +114,14 @@ class GameProcess {
                             res.push({
                                 from: this.game.to_board(candidate.from),
                                 to: this.game.to_board(candidate.to),
-                                kingMove: candidate.king_move,
+                                kingMove: candidate.kingMove,
                                 take: this.game.to_board(candidate.take)
                             });
                     }
                     else {
                         res.push({
                             from: this.game.to_board(move[moveKey].from), to: this.game.to_board(move[moveKey].to),
-                            kingMove: move[moveKey].king_move
+                            kingMove: move[moveKey].kingMove
                         });
                     }
                 }
@@ -134,7 +134,7 @@ class GameProcess {
                 this.moveList = undefined;
             }
         }
-        if (!this.moveList) {
+        if (!this.moveList || this.moveList.list.length == 0) {
             let color = this.game.position.cells[this.game.to_pack(pos)]?.color;
             if (color == undefined ||
                 this.moveColor !== color)
@@ -167,7 +167,7 @@ class GameProcess {
                     from: this.game.to_board(confirmed.from),
                     to: this.game.to_board(confirmed.to),
                     take: this.game.to_board(confirmed.take),
-                    king_move: confirmed.king_move,
+                    kingMove: confirmed.kingMove,
                     v: confirmed.v
                 };
                 let done = this.moveList.list.length == 1 &&
@@ -205,11 +205,11 @@ class GameProcess {
                 x.mov = {
                     from: this.game.to_board(x.mov.from),
                     to: this.game.to_board(x.mov.to),
-                    king_move: x.mov.king_move
+                    kingMove: x.mov.kingMove
                 };
             if (x.strike)
                 x.strike.vec = x.strike.vec.map(x => ({
-                    king_move: x.king_move,
+                    kingMove: x.kingMove,
                     from: this.game.to_board(x.from),
                     to: this.game.to_board(x.to),
                     take: this.game.to_board(x.take)
