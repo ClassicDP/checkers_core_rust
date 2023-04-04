@@ -90,6 +90,11 @@ export class Game {
 */
   find_mcts_and_make_best_move_ts_n(apply: boolean): any;
 /**
+* @param {boolean} apply
+* @returns {MCTSRes}
+*/
+  find_mcts_and_make_best_move(apply: boolean): MCTSRes;
+/**
 * @returns {any}
 */
   get_board_list_ts_n(): any;
@@ -136,6 +141,11 @@ export class Game {
 /**
 */
   readonly position: any;
+}
+/**
+*/
+export class MCTSRes {
+  free(): void;
 }
 /**
 */

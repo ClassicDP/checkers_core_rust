@@ -13,7 +13,12 @@ use crate::color::Color::{Black, White};
 use crate::log;
 use crate::PositionHistory::FinishType::{BlackWin, Draw1, Draw2, Draw3, Draw4, Draw5, WhiteWin};
 use crate::mcts::{McTree, Node};
-use crate::PositionHistory::{PositionAndMove, PositionHistory};
+use crate::PositionHistory::{FinishType, PositionAndMove, PositionHistory};
+#[wasm_bindgen]
+pub struct  MCTSRes {
+    board: Option<Vec<Vec<i32>>>,
+    finish: Option<FinishType>
+}
 
 #[wasm_bindgen]
 #[derive(Serialize, Debug)]
@@ -117,8 +122,7 @@ impl Game {
         };
         if pos_list.len() == 0 { panic!("Best move: it`s standoff position") }
         let move_color = self.current_position.next_move.unwrap();
-        if pos_list.len() < 3 { max_depth += 1; }
-        else {
+        if pos_list.len() < 3 { max_depth += 1; } else {
             // if piece move after midl of board
             if self.position_history.borrow().len() > 1 {
                 let move_to = self.position_history.borrow_mut().last().borrow().mov.as_ref().unwrap().to();
@@ -280,15 +284,23 @@ impl Game {
 
     #[wasm_bindgen]
     pub fn find_mcts_and_make_best_move_ts_n(&mut self, apply: bool) -> JsValue {
-        let finish = self.position_history.borrow_mut().finish_check();
-        if finish.is_some() {
-            return match serde_wasm_bindgen::to_value(&finish.unwrap()) {
+        let res: MCTSRes = self.find_mcts_and_make_best_move(apply);
+        return if res.board.is_some() {
+            match serde_wasm_bindgen::to_value(&res.board.unwrap()) {
                 Ok(js) => js,
                 Err(_err) => JsValue::UNDEFINED
-            };
+            }
+        } else {
+            match serde_wasm_bindgen::to_value(&res.finish.unwrap()) {
+                Ok(js) => js,
+                Err(_err) => JsValue::UNDEFINED
+            }
         }
+    }
 
 
+    #[wasm_bindgen]
+    pub fn find_mcts_and_make_best_move(&mut self, apply: bool) -> MCTSRes {
         if self.tree.is_some() {
             if let Some(new_node) =
                 self.tree.as_mut().unwrap().tree_childs().iter().find(|x| x.borrow().get_pos_mov().borrow().pos
@@ -300,23 +312,23 @@ impl Game {
         } else {
             self.tree = Some(McTree::new(self.current_position.clone(), self.position_history.clone()));
         }
-
+        let finish = self.position_history.borrow_mut().finish_check();
+        if finish.is_some() {
+            return MCTSRes{finish, board: None}
+        }
         let node = self.tree.as_mut().unwrap().search(self.mcts_lim);
-
         if apply {
             let mov = &node.clone().unwrap().borrow().get_move().unwrap().clone();
             self.make_move_by_move_item(mov);
             let finish = self.position_history.borrow_mut().finish_check();
             if finish.is_some() {
-                return match serde_wasm_bindgen::to_value(&finish.unwrap()) {
-                    Ok(js) => js,
-                    Err(_err) => JsValue::UNDEFINED
-                };
+                return MCTSRes{finish, board: None}
             }
-            self.tree = Option::from(McTree::new_from_node(node.clone().unwrap().clone(), self.position_history.clone()));
+            self.tree = Option::from(McTree::new_from_node(node.as_ref().unwrap().clone(), self.position_history.clone()));
+            self.tree.as_mut().unwrap().search(self.mcts_lim);
         }
         let childs =
-            if apply { node.unwrap().borrow().childs.clone() } else { self.tree.as_mut().unwrap().tree_childs() };
+            if !apply { node.unwrap().borrow().childs.clone() } else { self.tree.as_mut().unwrap().tree_childs() };
         let mut n_max =
             childs.iter().max_by(|x, y| x.borrow().N.cmp(&y.borrow().N)).unwrap().borrow().N as i32;
         if childs.len() == 1 { n_max *= 2; }
@@ -335,10 +347,8 @@ impl Game {
             board_list.push(board);
         }
 
-        return match serde_wasm_bindgen::to_value(&board_list) {
-            Ok(js) => { js }
-            Err(_err) => JsValue::UNDEFINED
-        };
+
+        return MCTSRes {finish: None, board: Some(board_list)}
     }
 
 

@@ -5,7 +5,7 @@ use crate::position::{Position};
 use crate::PositionHistory::{FinishType, PositionAndMove, PositionHistory};
 use rand::{Rng};
 use schemars::_private::NoSerialize;
-use crate::color;
+use crate::{color, log};
 use crate::color::Color;
 use crate::color::Color::{Black, White};
 use crate::moves_list::MoveItem;

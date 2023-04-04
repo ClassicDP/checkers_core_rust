@@ -376,6 +376,14 @@ class Game {
         return takeObject(ret);
     }
     /**
+    * @param {boolean} apply
+    * @returns {MCTSRes}
+    */
+    find_mcts_and_make_best_move(apply) {
+        const ret = wasm.game_find_mcts_and_make_best_move(this.ptr, apply);
+        return MCTSRes.__wrap(ret);
+    }
+    /**
     * @returns {any}
     */
     get_board_list_ts_n() {
@@ -478,6 +486,30 @@ class Game {
     }
 }
 module.exports.Game = Game;
+/**
+*/
+class MCTSRes {
+
+    static __wrap(ptr) {
+        const obj = Object.create(MCTSRes.prototype);
+        obj.ptr = ptr;
+
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.ptr;
+        this.ptr = 0;
+
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_mctsres_free(ptr);
+    }
+}
+module.exports.MCTSRes = MCTSRes;
 /**
 */
 class MoveItem {
