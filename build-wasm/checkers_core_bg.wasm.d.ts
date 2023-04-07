@@ -13,7 +13,7 @@ export function game_set_mcts_lim(a: number, b: number): void;
 export function game_insert_piece(a: number, b: number): void;
 export function game_remove_piece(a: number, b: number): number;
 export function game_position(a: number): number;
-export function game_make_move_by_move_item(a: number, b: number): void;
+export function game_make_move_by_move_item(a: number, b: number): number;
 export function game_best_move(a: number, b: number, c: number, d: number, e: number): number;
 export function game_get_or_apply_best_move(a: number, b: number): number;
 export function game_make_best_move(a: number, b: number): void;
@@ -22,6 +22,7 @@ export function game_find_mcts_and_make_best_move_ts_n(a: number, b: number): nu
 export function game_find_mcts_and_make_best_move(a: number, b: number): number;
 export function game_get_board_list_ts_n(a: number): number;
 export function game_move_by_tree_index_ts_n(a: number, b: number): number;
+export function game_move_by_tree_index(a: number, b: number): number;
 export function game_move_by_index_ts_n(a: number, b: number): number;
 export function game_get_best_move_rust(a: number): number;
 export function game_state_(a: number, b: number): void;

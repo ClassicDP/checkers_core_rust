@@ -329,10 +329,12 @@ class Game {
     }
     /**
     * @param {MoveItem} move_item
+    * @returns {number | undefined}
     */
     make_move_by_move_item(move_item) {
         _assertClass(move_item, MoveItem);
-        wasm.game_make_move_by_move_item(this.ptr, move_item.ptr);
+        const ret = wasm.game_make_move_by_move_item(this.ptr, move_item.ptr);
+        return ret === 7 ? undefined : ret;
     }
     /**
     * @param {number} max_depth
@@ -397,6 +399,14 @@ class Game {
     move_by_tree_index_ts_n(i) {
         const ret = wasm.game_move_by_tree_index_ts_n(this.ptr, i);
         return takeObject(ret);
+    }
+    /**
+    * @param {number} i
+    * @returns {number | undefined}
+    */
+    move_by_tree_index(i) {
+        const ret = wasm.game_move_by_tree_index(this.ptr, i);
+        return ret === 7 ? undefined : ret;
     }
     /**
     * @param {number} i

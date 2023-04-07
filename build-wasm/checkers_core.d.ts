@@ -61,8 +61,9 @@ export class Game {
   make_move_by_pos_item(pos: BestPos): void;
 /**
 * @param {MoveItem} move_item
+* @returns {number | undefined}
 */
-  make_move_by_move_item(move_item: MoveItem): void;
+  make_move_by_move_item(move_item: MoveItem): number | undefined;
 /**
 * @param {number} max_depth
 * @param {number} best_white
@@ -103,6 +104,11 @@ export class Game {
 * @returns {any}
 */
   move_by_tree_index_ts_n(i: number): any;
+/**
+* @param {number} i
+* @returns {number | undefined}
+*/
+  move_by_tree_index(i: number): number | undefined;
 /**
 * @param {number} i
 * @returns {any}
