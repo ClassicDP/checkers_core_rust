@@ -311,6 +311,36 @@ impl Game {
         if self.tree.as_ref().unwrap().root.borrow().finish.is_some() {
             return MCTSRes { finish: self.tree.as_ref().unwrap().root.borrow().finish.clone(), board_list: None };
         }
+        if self.tree.as_ref().unwrap().root.borrow().pos_mov.borrow().pos != self.current_position {
+            if let Some(tree) = &self.tree {
+                let chs =  tree.tree_childs();
+                let node =
+                    chs.iter().find(|x|x.borrow().pos_mov.borrow().pos == self.current_position);
+                if node.is_some() {
+                    self.tree.as_mut().unwrap().root = node.unwrap().clone();
+                } else {
+                    // print!("{:?}\n", tree.tree_childs().iter_mut().map(|x|x.borrow().pos_mov.clone()));
+                    let chs =  tree.tree_childs();
+                    for ch in chs {
+                        print!("-------\n");
+                        for x in ch.borrow().pos_mov.borrow().pos.cells.iter().enumerate() {
+                            if self.current_position.cells[x.0] != *x.1 {
+                                print!("{:?}  ", x.1);
+                            }
+                        }
+                        print!("\n");
+                    }
+                    // print!("{:?}\n", self.current_position);
+                    panic!("node error")
+                }
+            }
+        }
+        if self.tree.as_ref().unwrap().root.borrow().finish.is_some() {
+            return MCTSRes { finish: self.tree.as_ref().unwrap().root.borrow().finish.clone(), board_list: None };
+        }
+        if self.tree.as_ref().unwrap().root.borrow().pos_mov.borrow().pos != self.current_position {
+            panic!("tree error");
+        }
         let node = self.tree.as_mut().unwrap().search(self.mcts_lim);
         if apply {
             self.current_position = node.clone().borrow().pos_mov.borrow().pos.clone();

@@ -25,18 +25,44 @@ struct MoveAsQuite {
     to: usize,
 }
 
+pub fn init(game: &mut Game) {
+    *game = Game::new(8);
+    vec![0, 2, 4, 6, 9, 11, 13, 15, 16, 18, 20, 22].iter()
+        .for_each(|pos|
+            game.insert_piece(Piece::new(game.to_pack(*pos), Color::White, false)));
+    vec![0, 2, 4, 6, 9, 11, 13, 15, 16, 18, 20, 22].iter().map(|x| 63 - x).collect::<Vec<_>>().iter()
+        .for_each(|pos|
+            game.insert_piece(Piece::new(game.to_pack(*pos), Color::Black, false)));
+    game.current_position.next_move = Option::from(Color::White);
+}
+
+pub fn deep_mcts() {
+    let mut game = Game::new(8);
+
+    loop {
+        init(&mut game);
+        game.set_mcts_lim(300000);
+        game.set_depth(6);
+        loop {
+            let finish = game.position_history.borrow_mut().finish_check();
+            if let Some(finish) = finish {
+                print!("{:?}  {:?}\n", finish, game.position_history.borrow().list.len());
+                break;
+            }
+            let best_move = game.get_best_move_rust();
+            game.make_best_move(&best_move);
+            let finish = game.position_history.borrow_mut().finish_check();
+            if let Some(finish) = finish {
+                print!("{:?}  {:?}\n", finish, game.position_history.borrow().list.len());
+                break;
+            }
+            game.find_mcts_and_make_best_move(true);
+        }
+    }
+}
+
 pub fn mcts() {
     let mut game = Game::new(8);
-    fn init(game: &mut Game) {
-        *game = Game::new(8);
-        vec![0, 2, 4, 6, 9, 11, 13, 15, 16, 18, 20, 22].iter()
-            .for_each(|pos|
-                game.insert_piece(Piece::new(game.to_pack(*pos), Color::White, false)));
-        vec![0, 2, 4, 6, 9, 11, 13, 15, 16, 18, 20, 22].iter().map(|x| 63 - x).collect::<Vec<_>>().iter()
-            .for_each(|pos|
-                game.insert_piece(Piece::new(game.to_pack(*pos), Color::Black, false)));
-        game.current_position.next_move = Option::from(Color::White);
-    }
 
     init(&mut game);
     loop {
@@ -100,8 +126,8 @@ pub fn random_game_test() {
 }
 
 
-
 pub fn main() {
+    deep_mcts();
     mcts();
 
     return;
