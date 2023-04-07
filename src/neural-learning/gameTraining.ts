@@ -1094,6 +1094,6 @@ const trainingParams =
 const datasetFileName = 'dataset.json'
 let datasetItems: DatasetItem[] = loadDataset(datasetFileName)
 console.log(`Dataset size = ${datasetItems.length}`)
-const newDatasetItemsCount = formDataset(datasetItems, 100, true)
+const newDatasetItemsCount = formDataset(datasetItems, 1000, true)
 console.log(`New dataset items count = ${newDatasetItemsCount}`)
 saveDataset(datasetItems, datasetFileName)

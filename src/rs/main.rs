@@ -41,8 +41,8 @@ pub fn deep_mcts() {
 
     loop {
         init(&mut game);
-        game.set_mcts_lim(300000);
-        game.set_depth(6);
+        game.set_mcts_lim(10000);
+        game.set_depth(4);
         loop {
             let finish = game.position_history.borrow_mut().finish_check();
             if let Some(finish) = finish {
