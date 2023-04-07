@@ -14,10 +14,13 @@ use crate::log;
 use crate::PositionHistory::FinishType::{BlackWin, Draw1, Draw2, Draw3, Draw4, Draw5, WhiteWin};
 use crate::mcts::{McTree, Node};
 use crate::PositionHistory::{FinishType, PositionAndMove, PositionHistory};
+
 #[wasm_bindgen]
-pub struct  MCTSRes {
-    board: Option<Vec<Vec<i32>>>,
-    finish: Option<FinishType>
+pub struct MCTSRes {
+    #[wasm_bindgen(skip)]
+    pub board_list: Option<Vec<Vec<i32>>>,
+    #[wasm_bindgen(skip)]
+    pub finish: Option<FinishType>,
 }
 
 #[wasm_bindgen]
@@ -101,10 +104,10 @@ impl Game {
         self.position_history.borrow_mut().push(PositionAndMove::from(self.current_position.clone(), pos.get_move_item()));
     }
 
-    pub fn make_move_by_move_item(&mut self, move_item: &MoveItem) {
+    pub fn make_move_by_move_item(&mut self, move_item: &MoveItem) -> Option<FinishType> {
         self.current_position.make_move(move_item);
         self.position_history.borrow_mut()
-            .push(PositionAndMove::from(self.current_position.clone(), move_item.clone()));
+            .push(PositionAndMove::from(self.current_position.clone(), move_item.clone()))
     }
 
     #[wasm_bindgen]
@@ -285,8 +288,8 @@ impl Game {
     #[wasm_bindgen]
     pub fn find_mcts_and_make_best_move_ts_n(&mut self, apply: bool) -> JsValue {
         let res: MCTSRes = self.find_mcts_and_make_best_move(apply);
-        return if res.board.is_some() {
-            match serde_wasm_bindgen::to_value(&res.board.unwrap()) {
+        return if res.board_list.is_some() {
+            match serde_wasm_bindgen::to_value(&res.board_list.unwrap()) {
                 Ok(js) => js,
                 Err(_err) => JsValue::UNDEFINED
             }
@@ -295,42 +298,37 @@ impl Game {
                 Ok(js) => js,
                 Err(_err) => JsValue::UNDEFINED
             }
-        }
+        };
     }
 
 
     #[wasm_bindgen]
     pub fn find_mcts_and_make_best_move(&mut self, apply: bool) -> MCTSRes {
-        if self.tree.is_some() {
-            if let Some(new_node) =
-                self.tree.as_mut().unwrap().tree_childs().iter().find(|x| x.borrow().get_pos_mov().borrow().pos
-                    == self.current_position) {
-                self.tree = Option::from(McTree::new_from_node(new_node.clone(), self.position_history.clone()));
-            } else {
-                self.tree = Some(McTree::new(self.current_position.clone(), self.position_history.clone()));
-            }
-        } else {
+
+        if self.tree.is_none() {
             self.tree = Some(McTree::new(self.current_position.clone(), self.position_history.clone()));
         }
-        let finish = self.position_history.borrow_mut().finish_check();
-        if finish.is_some() {
-            return MCTSRes{finish, board: None}
+        if self.tree.as_ref().unwrap().root.borrow().finish.is_some() {
+            return MCTSRes { finish: self.tree.as_ref().unwrap().root.borrow().finish.clone(), board_list: None };
         }
         let node = self.tree.as_mut().unwrap().search(self.mcts_lim);
         if apply {
-            let mov = &node.clone().unwrap().borrow().get_move().unwrap().clone();
-            self.make_move_by_move_item(mov);
-            let finish = self.position_history.borrow_mut().finish_check();
-            if finish.is_some() {
-                return MCTSRes{finish, board: None}
+            self.current_position = node.clone().borrow().pos_mov.borrow().pos.clone();
+            self.position_history.borrow_mut().push_rc(
+                node.clone().borrow().pos_mov.clone());
+            if node.borrow().finish.is_some() {
+                return MCTSRes { finish: node.borrow().finish.clone(), board_list: None };
             }
-            self.tree = Option::from(McTree::new_from_node(node.as_ref().unwrap().clone(), self.position_history.clone()));
-            self.tree.as_mut().unwrap().search(self.mcts_lim);
+            self.tree = Option::from(McTree::new_from_node(node.clone(), self.position_history.clone()));
         }
+
+
+        // to boards list
         let childs =
-            if !apply { node.unwrap().borrow().childs.clone() } else { self.tree.as_mut().unwrap().tree_childs() };
+            if !apply { node.clone().borrow().childs.clone() } else { self.tree.as_mut().unwrap().tree_childs() };
         let mut n_max =
-            childs.iter().max_by(|x, y| x.borrow().N.cmp(&y.borrow().N)).unwrap().borrow().N as i32;
+            childs.iter().max_by(|x, y|
+                x.borrow().N.cmp(&y.borrow().N)).unwrap().borrow().N as i32;
         if childs.len() == 1 { n_max *= 2; }
         let mut board_list: Vec<Vec<i32>> = vec![];
         for child in childs {
@@ -341,14 +339,12 @@ impl Game {
                         (if piece.is_king { 3 } else { 1 }) * if piece.color == Color::White { 1 } else { -1 }
                 }
             }
-
             board.push(child.borrow().N as i32);
             board.push(n_max);
             board_list.push(board);
         }
 
-
-        return MCTSRes {finish: None, board: Some(board_list)}
+        return MCTSRes { finish: None, board_list: Some(board_list) };
     }
 
 
@@ -362,12 +358,16 @@ impl Game {
 
     #[wasm_bindgen]
     pub fn move_by_tree_index_ts_n(&mut self, i: i32) -> JsValue {
-        let mov = self.tree.as_mut().unwrap().tree_childs()[i as usize].borrow().get_move();
-        if mov.is_some() {
-            self.make_move_by_move_item(&mov.unwrap());
-            return JsValue::TRUE;
-        }
-        return JsValue::FALSE;
+        return match serde_wasm_bindgen::to_value(&self.move_by_tree_index(i)) {
+            Ok(js) => js,
+            Err(_err) => JsValue::UNDEFINED
+        };
+    }
+
+    pub fn move_by_tree_index(&mut self, i: i32) -> Option<FinishType> {
+        let node = self.tree.as_mut().unwrap().tree_childs()[i as usize].clone();
+        self.tree.as_mut().unwrap().root = node.clone();
+        return self.make_move_by_move_item(&node.borrow_mut().get_move().unwrap());
     }
 
     #[wasm_bindgen]
@@ -496,6 +496,9 @@ impl Game {
 
 #[cfg(test)]
 mod tests {
+    use std::io;
+    use std::io::Write;
+    use js_sys::Math::min;
     use crate::color::Color;
     use crate::game::Game;
     use crate::PositionHistory::FinishType::{BlackWin, Draw1, Draw2, Draw3, WhiteWin};
@@ -521,6 +524,7 @@ mod tests {
         });
         assert_eq!(list.list.len(), 15);
     }
+
 
     #[test]
     pub fn game_strike_list() {

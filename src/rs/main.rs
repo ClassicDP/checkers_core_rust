@@ -25,6 +25,45 @@ struct MoveAsQuite {
     to: usize,
 }
 
+pub fn mcts() {
+    let mut game = Game::new(8);
+    fn init(game: &mut Game) {
+        *game = Game::new(8);
+        vec![0, 2, 4, 6, 9, 11, 13, 15, 16, 18, 20, 22].iter()
+            .for_each(|pos|
+                game.insert_piece(Piece::new(game.to_pack(*pos), Color::White, false)));
+        vec![0, 2, 4, 6, 9, 11, 13, 15, 16, 18, 20, 22].iter().map(|x| 63 - x).collect::<Vec<_>>().iter()
+            .for_each(|pos|
+                game.insert_piece(Piece::new(game.to_pack(*pos), Color::Black, false)));
+        game.current_position.next_move = Option::from(Color::White);
+    }
+
+    init(&mut game);
+    loop {
+        let next = game.find_mcts_and_make_best_move(true);
+        if next.board_list.is_some() {
+            let list0 = next.board_list.unwrap();
+            let mut list = list0.clone();
+            let i = list[0].len() - 2;
+            list.sort_by(|x, y| x[i].cmp(&y[i]));
+            let mut i = list.len() - 1;
+            // if i > 0 { i -= 1; }
+            let x0 = list[i].clone();
+            let index = list0.iter().enumerate().find(|x| *x.1 == x0).unwrap().0;
+            let finish = game.move_by_tree_index(index as i32);
+            if finish.is_some() {
+                print!("{:?}  {:?}\n", finish, game.position_history.borrow().list.len());
+                io::stdout().flush().unwrap();
+                init(&mut game);
+            }
+        } else {
+            print!("{:?}  {:?}\n", next.finish, game.position_history.borrow().list.len());
+            io::stdout().flush().unwrap();
+            init(&mut game);
+        }
+    }
+}
+
 pub fn random_game_test() {
     let v_w: Vec<_> = vec![0; 12].iter().enumerate()
         .map(|(i, x)| if i / 4 % 2 == 0 { 2 * i } else { 2 * i + 1 }).collect();
@@ -60,119 +99,11 @@ pub fn random_game_test() {
     }
 }
 
-pub fn best_move_triangle() {
-    let mut game = Game::new(8);
-    game.set_depth(4);
-    // game.current_position.next_move = Some(Color::Black);
-    // vec![31].iter()
-    //     .for_each(|pos|
-    //         game.insert_piece(Piece::new(game.to_pack(*pos), Color::White, true)));
-    // vec![43, 36, 20].iter()
-    //     .for_each(|pos|
-    //         game.insert_piece(Piece::new(game.to_pack(*pos), Color::Black, true)));
 
-    vec![0, 2, 4, 6, 9, 11, 13, 15, 16, 18, 20, 22].iter()
-        .for_each(|pos|
-            game.insert_piece(Piece::new(game.to_pack(*pos), Color::White, false)));
-    vec![0, 2, 4, 6, 9, 11, 13, 15, 16, 18, 20, 22].iter().map(|x| 63 - x).collect::<Vec<_>>().iter()
-        .for_each(|pos|
-            game.insert_piece(Piece::new(game.to_pack(*pos), Color::Black, false)));
-    game.current_position.next_move = Option::from(Color::White);
-    // game.current_position.next_move = Some(Color::Black);
-    // vec![52, 54, 38, 63].iter()
-    //     .for_each(|pos|
-    //         game.insert_piece(Piece::new(game.to_pack(*pos), Color::Black, false)));
-    // vec![0, 9].iter()
-    //     .for_each(|pos|
-    //         game.insert_piece(Piece::new(game.to_pack(*pos), Color::White, true)));
-
-
-    // game.position_history.borrow_mut().push(PositionAndMove::from_pos(game.current_position));
-    game.tree = Some(McTree::new(game.current_position.clone(), game.position_history.clone()));
-
-
-    let mut node: Option<Rc<RefCell<Node>>> = None;
-    loop {
-        let mut new_root_found = false;
-        if let Some(node) = node.clone() {
-            if let Some(new_root_node) =
-                node.borrow()
-                    .childs.iter()
-                    .find(|x| x.borrow().get_pos_mov().borrow().pos == game.current_position) {
-                game.tree = Some(McTree::new_from_node(new_root_node.clone(), game.position_history.clone()));
-                new_root_found = true;
-            }
-        }
-        if !new_root_found {
-            game.tree = Some(McTree::new(game.current_position.clone(), game.position_history.clone()));
-        }
-        if let Some(ref mut tree) = game.tree {
-            node = tree.search(200_000);
-            if node.is_none() {
-                print!("deeps win");
-                break;
-            }
-            print!("___ {:?} \n", game.tree.as_ref().unwrap().root_map());
-            let mov = &node.clone().unwrap().borrow().get_move().unwrap().clone();
-            // print!("{:?}\n", &mov);
-            // io::stdout().flush().unwrap();
-            game.make_move_by_move_item(mov);
-            if game.position_history.borrow_mut().finish_check().is_some() {
-                print!("move queue by deeps, but {:?} \n", game.position_history.borrow_mut().finish_check());
-                break;
-            }
-            let bp = game.get_best_move_rust();
-            game.make_move_by_move_item(&bp.get_move_item());
-            if game.position_history.borrow_mut().finish_check().is_some() {
-                print!("move queue by mcts, but {:?} \n", game.position_history.borrow_mut().finish_check());
-                break;
-            }
-        }
-    }
-    print!("{:?}\n", &game.position_history.borrow_mut().last().borrow().pos.state);
-
-    return;
-    let mut game = Game::new(8);
-    game.set_depth(8);
-    game.current_position.next_move = Some(Color::Black);
-    vec![31].iter()
-        .for_each(|pos|
-            game.insert_piece(Piece::new(game.to_pack(*pos), Color::White, true)));
-    vec![43, 36, 20].iter()
-        .for_each(|pos|
-            game.insert_piece(Piece::new(game.to_pack(*pos), Color::Black, true)));
-
-    use crate::moves::PieceMove;
-    while game.position_history.borrow_mut().finish_check().is_none() {
-        print!("state {}\n", game.state_());
-        print!("history {:?}\n", game.position_history.borrow().len());
-        let best = game.get_best_move_rust();
-        print!("{}", {
-            if best.get_move_item().strike.is_some() {
-                format!("move: {:?}\n", best.get_move_item().strike.unwrap().vec.iter().map(
-                    |x|
-                        MoveAsStrike {
-                            from: game.to_board(x.from()),
-                            to: game.to_board(x.to()),
-                            take: game.to_board(x.take().unwrap()),
-                        }).collect::<Vec<_>>())
-            } else {
-                format!("move: {:?}\n", [best.get_move_item().mov.unwrap()].iter().map(|x|
-                    MoveAsQuite {
-                        from: game.to_board(x.from()),
-                        to: game.to_board(x.to),
-                    }).collect::<Vec<_>>())
-            }
-        });
-        game.make_move_by_pos_item(&best);
-    }
-    print!("{:?}", game.position_history.borrow_mut().finish_check());
-}
 
 pub fn main() {
-    loop {
-        best_move_triangle();
-    }
+    mcts();
+
     return;
     // random_game_test();
     let mut game = Game::new(8);
