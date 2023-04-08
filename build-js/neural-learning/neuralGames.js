@@ -18,6 +18,7 @@ do {
     gameProcess.moveColor = checkers_core_1.Color.White;
     let movesCount = 0;
     let neuralMakeFirstMove = Math.random() < 0.5;
+    neuralMakeFirstMove = false;
     if (neuralMakeFirstMove) {
         listOrFinish = gameProcess.game.find_mcts_and_make_best_move_ts_n(false);
         if (listOrFinish instanceof Array) {

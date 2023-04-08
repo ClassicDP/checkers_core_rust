@@ -42,6 +42,9 @@ class GameProcess {
     isQuiteMoveList() {
         return this.moveList?.list.length && this.moveList.list[0].mov;
     }
+    setMethod(method) {
+        this.game.set_method(method);
+    }
     get moveColor() {
         return this.game.moveColor;
     }

@@ -2,6 +2,12 @@
 /* eslint-disable */
 /**
 */
+export enum Method {
+  Deep = 0,
+  MCTS = 1,
+}
+/**
+*/
 export enum FinishType {
   Draw1 = 0,
   Draw2 = 1,
@@ -46,6 +52,10 @@ export class Game {
 * @param {number} mcts_lim
 */
   set_mcts_lim(mcts_lim: number): void;
+/**
+* @param {number} method
+*/
+  set_method(method: number): void;
 /**
 * @param {Piece} piece
 */
@@ -99,6 +109,9 @@ export class Game {
 * @returns {any}
 */
   get_board_list_ts_n(): any;
+/**
+*/
+  mov_back(): void;
 /**
 * @param {number} i
 * @returns {any}

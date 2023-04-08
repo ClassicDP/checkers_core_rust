@@ -1,4 +1,5 @@
 use std::cell::{RefCell};
+use std::ops::Deref;
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use crate::color::Color;
@@ -10,6 +11,7 @@ use crate::position_environment::PositionEnvironment;
 use ts_rs::*;
 use serde::Serialize;
 use crate::color::Color::{Black, White};
+use crate::game::Method::{Deep, MCTS};
 use crate::log;
 use crate::PositionHistory::FinishType::{BlackWin, Draw1, Draw2, Draw3, Draw4, Draw5, WhiteWin};
 use crate::mcts::{McTree, Node};
@@ -21,6 +23,8 @@ pub struct MCTSRes {
     pub board_list: Option<Vec<Vec<i32>>>,
     #[wasm_bindgen(skip)]
     pub finish: Option<FinishType>,
+    #[wasm_bindgen(skip)]
+    pub pos_move: Option<Rc<RefCell<PositionAndMove>>>,
 }
 
 #[wasm_bindgen]
@@ -38,6 +42,11 @@ impl BestPos {
     }
 }
 
+#[wasm_bindgen]
+pub enum Method {
+    Deep,
+    MCTS,
+}
 
 #[wasm_bindgen]
 pub struct Game {
@@ -48,6 +57,7 @@ pub struct Game {
     pub current_position: Position,
     max_depth: i16,
     mcts_lim: i32,
+    method: Method,
     #[wasm_bindgen(skip)]
     pub tree: Option<McTree>,
 }
@@ -64,6 +74,7 @@ impl Game {
             current_position: position.clone(),
             position_history,
             max_depth: 3,
+            method: Deep,
             mcts_lim: 10000,
             tree: None,
         }
@@ -79,6 +90,10 @@ impl Game {
         self.mcts_lim = mcts_lim;
     }
 
+    #[wasm_bindgen]
+    pub fn set_method(&mut self, method: Method) {
+        self.method = method;
+    }
 
     #[wasm_bindgen]
     pub fn insert_piece(&mut self, piece: Piece) {
@@ -223,8 +238,19 @@ impl Game {
                 Err(_err) => JsValue::UNDEFINED
             };
         }
-        let best_move = self.best_move(self.max_depth, i32::MIN, i32::MAX, 0);
-        if apply { self.make_best_move(&best_move) }
+        let best_move = match self.method {
+            Deep => {
+                let best_move = self.best_move(self.max_depth, i32::MIN, i32::MAX, 0);
+                if apply {
+                    self.make_best_move(&best_move);
+                }
+                best_move
+            }
+            MCTS => {
+                let best = self.find_mcts_and_make_best_move(apply);
+                BestPos { pos: best.pos_move, deep_eval: 0 }
+            }
+        };
         match serde_wasm_bindgen::to_value(
             &best_move) {
             Ok(js) => js,
@@ -301,26 +327,24 @@ impl Game {
         };
     }
 
-
     #[wasm_bindgen]
     pub fn find_mcts_and_make_best_move(&mut self, apply: bool) -> MCTSRes {
-
         if self.tree.is_none() {
             self.tree = Some(McTree::new(self.current_position.clone(), self.position_history.clone()));
         }
         if self.tree.as_ref().unwrap().root.borrow().finish.is_some() {
-            return MCTSRes { finish: self.tree.as_ref().unwrap().root.borrow().finish.clone(), board_list: None };
+            return MCTSRes { finish: self.tree.as_ref().unwrap().root.borrow().finish.clone(), board_list: None, pos_move: None };
         }
         if self.tree.as_ref().unwrap().root.borrow().pos_mov.borrow().pos != self.current_position {
             if let Some(tree) = &self.tree {
-                let chs =  tree.tree_childs();
+                let chs = tree.tree_childs();
                 let node =
-                    chs.iter().find(|x|x.borrow().pos_mov.borrow().pos == self.current_position);
+                    chs.iter().find(|x| x.borrow().pos_mov.borrow().pos == self.current_position);
                 if node.is_some() {
                     self.tree.as_mut().unwrap().root = node.unwrap().clone();
                 } else {
                     // print!("{:?}\n", tree.tree_childs().iter_mut().map(|x|x.borrow().pos_mov.clone()));
-                    let chs =  tree.tree_childs();
+                    let chs = tree.tree_childs();
                     for ch in chs {
                         print!("-------\n");
                         for x in ch.borrow().pos_mov.borrow().pos.cells.iter().enumerate() {
@@ -336,18 +360,24 @@ impl Game {
             }
         }
         if self.tree.as_ref().unwrap().root.borrow().finish.is_some() {
-            return MCTSRes { finish: self.tree.as_ref().unwrap().root.borrow().finish.clone(), board_list: None };
+            return MCTSRes { finish: self.tree.as_ref().unwrap().root.borrow().finish.clone(), board_list: None, pos_move: None };
         }
         if self.tree.as_ref().unwrap().root.borrow().pos_mov.borrow().pos != self.current_position {
             panic!("tree error");
         }
-        let node = self.tree.as_mut().unwrap().search(self.mcts_lim);
+        let node = if self.tree.as_mut().unwrap().root.borrow().childs.len() == 1 {
+            self.tree.as_mut().unwrap().root.borrow().childs[0].clone()
+        } else { self.tree.as_mut().unwrap().search(self.mcts_lim) };
         if apply {
             self.current_position = node.clone().borrow().pos_mov.borrow().pos.clone();
             self.position_history.borrow_mut().push_rc(
                 node.clone().borrow().pos_mov.clone());
             if node.borrow().finish.is_some() {
-                return MCTSRes { finish: node.borrow().finish.clone(), board_list: None };
+                return MCTSRes {
+                    finish: node.borrow().finish.clone(),
+                    board_list: None,
+                    pos_move: Some(node.borrow().pos_mov.clone()),
+                };
             }
             self.tree = Option::from(McTree::new_from_node(node.clone(), self.position_history.clone()));
         }
@@ -374,9 +404,8 @@ impl Game {
             board_list.push(board);
         }
 
-        return MCTSRes { finish: None, board_list: Some(board_list) };
+        return MCTSRes { finish: None, board_list: Some(board_list), pos_move: Some(node.borrow().pos_mov.clone()) };
     }
-
 
     #[wasm_bindgen]
     pub fn get_board_list_ts_n(&mut self) -> JsValue {
@@ -384,6 +413,16 @@ impl Game {
             Ok(js) => js,
             Err(_err) => JsValue::UNDEFINED
         };
+    }
+
+    #[wasm_bindgen]
+    pub fn mov_back(&mut self) {
+        if self.position_history.borrow().list.len() > 1 {
+            self.position_history.borrow_mut().list.pop();
+            self.position_history.borrow_mut().list.pop();
+            self.current_position = self.position_history.borrow_mut().list.last().unwrap().borrow().pos.clone();
+            self.tree = None;
+        }
     }
 
     #[wasm_bindgen]
@@ -429,11 +468,9 @@ impl Game {
         self.best_move(self.max_depth, i32::MIN, i32::MAX, 0)
     }
 
-
     pub fn state_(&self) -> String {
         return format!("{:?}", self.current_position.state);
     }
-
 
     #[wasm_bindgen]
     pub fn to_board(&self, pack_index: BoardPos) -> BoardPos {
@@ -473,7 +510,6 @@ impl Game {
     pub fn set_color(&mut self, color: Color) {
         self.current_position.next_move = Some(color);
     }
-
 
     #[wasm_bindgen]
     pub fn make_move_for_front(&mut self, pos_chain: &JsValue) -> Result<JsValue, JsValue> {

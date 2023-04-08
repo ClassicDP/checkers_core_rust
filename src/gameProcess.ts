@@ -1,5 +1,5 @@
 import * as wasm from "../build-wasm/checkers_core"
-import {Color} from "../build-wasm/checkers_core";
+import {Color, Method} from "../build-wasm/checkers_core";
 import {Position} from "./bindings/Position";
 import {ColorType} from "./bindings/ColorType";
 import {MoveList} from "./bindings/MoveList";
@@ -40,6 +40,10 @@ export class GameProcess {
 
     isQuiteMoveList() {
         return this.moveList?.list.length && this.moveList.list[0].mov
+    }
+
+    setMethod (method: Method) {
+        this.game.set_method(method)
     }
 
     get moveColor() {

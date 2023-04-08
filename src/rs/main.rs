@@ -34,6 +34,13 @@ pub fn init(game: &mut Game) {
         .for_each(|pos|
             game.insert_piece(Piece::new(game.to_pack(*pos), Color::Black, false)));
     game.current_position.next_move = Option::from(Color::White);
+    // vec![4].iter()
+    //     .for_each(|pos|
+    //         game.insert_piece(Piece::new(game.to_pack(*pos), Color::Black, true)));
+    // vec![0, 29, 34].iter()
+    //     .for_each(|pos|
+    //         game.insert_piece(Piece::new(game.to_pack(*pos), Color::White, true)));
+    // game.current_position.next_move = Option::from(Color::White);
 }
 
 pub fn deep_mcts() {
@@ -41,8 +48,8 @@ pub fn deep_mcts() {
 
     loop {
         init(&mut game);
-        game.set_mcts_lim(10000);
-        game.set_depth(4);
+        game.set_mcts_lim(400000);
+        game.set_depth(6);
         loop {
             let finish = game.position_history.borrow_mut().finish_check();
             if let Some(finish) = finish {
@@ -50,6 +57,8 @@ pub fn deep_mcts() {
                 break;
             }
             let best_move = game.get_best_move_rust();
+            // print!("{:?}\n", best_move.get_move_item());
+            // io::stdout().flush().unwrap();
             game.make_best_move(&best_move);
             let finish = game.position_history.borrow_mut().finish_check();
             if let Some(finish) = finish {

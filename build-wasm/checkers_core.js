@@ -228,6 +228,9 @@ function getArrayU8FromWasm0(ptr, len) {
 }
 /**
 */
+module.exports.Method = Object.freeze({ Deep:0,"0":"Deep",MCTS:1,"1":"MCTS", });
+/**
+*/
 module.exports.FinishType = Object.freeze({ Draw1:0,"0":"Draw1",Draw2:1,"1":"Draw2",Draw3:2,"2":"Draw3",Draw4:3,"3":"Draw4",Draw5:4,"4":"Draw5",BlackWin:5,"5":"BlackWin",WhiteWin:6,"6":"WhiteWin", });
 /**
 */
@@ -296,6 +299,12 @@ class Game {
     */
     set_mcts_lim(mcts_lim) {
         wasm.game_set_mcts_lim(this.ptr, mcts_lim);
+    }
+    /**
+    * @param {number} method
+    */
+    set_method(method) {
+        wasm.game_set_method(this.ptr, method);
     }
     /**
     * @param {Piece} piece
@@ -391,6 +400,11 @@ class Game {
     get_board_list_ts_n() {
         const ret = wasm.game_get_board_list_ts_n(this.ptr);
         return takeObject(ret);
+    }
+    /**
+    */
+    mov_back() {
+        wasm.game_mov_back(this.ptr);
     }
     /**
     * @param {number} i

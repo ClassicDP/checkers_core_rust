@@ -1,5 +1,5 @@
 import * as wasm from "../build-wasm/checkers_core";
-import { Color } from "../build-wasm/checkers_core";
+import { Color, Method } from "../build-wasm/checkers_core";
 import { Position } from "./bindings/Position";
 import { ColorType } from "./bindings/ColorType";
 import { MoveList } from "./bindings/MoveList";
@@ -24,6 +24,7 @@ export declare class GameProcess {
     static color(color?: ColorType): Color | undefined;
     constructor(size: number, color?: Color);
     isQuiteMoveList(): 0 | import("./bindings/QuietMove").QuietMove | null | undefined;
+    setMethod(method: Method): void;
     get moveColor(): Color;
     set moveColor(color: Color);
     invertMoveColor(): void;
