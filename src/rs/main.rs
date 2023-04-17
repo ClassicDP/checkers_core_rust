@@ -4,6 +4,7 @@ use std::io::Write;
 use std::ops::Deref;
 use std::rc::Rc;
 use rand::{Rng, thread_rng};
+use checkers_core::game::Method;
 use crate::color::Color;
 use crate::color::Color::Black;
 use crate::game::Game;
@@ -48,7 +49,7 @@ pub fn deep_mcts() {
 
     loop {
         init(&mut game);
-        game.set_mcts_lim(400000);
+        game.set_mcts_lim(100000);
         game.set_depth(6);
         loop {
             let finish = game.position_history.borrow_mut().finish_check();
@@ -57,15 +58,16 @@ pub fn deep_mcts() {
                 break;
             }
             let best_move = game.get_best_move_rust();
-            // print!("{:?}\n", best_move.get_move_item());
-            // io::stdout().flush().unwrap();
+            print!("{:?}\n", best_move.get_move_item());
+            io::stdout().flush().unwrap();
             game.make_best_move(&best_move);
             let finish = game.position_history.borrow_mut().finish_check();
             if let Some(finish) = finish {
                 print!("{:?}  {:?}\n", finish, game.position_history.borrow().list.len());
                 break;
-            }
-            game.find_mcts_and_make_best_move(true);
+            };
+            let mov = game.mix_method(true).get_move_item();
+            print!("{:?}\n", mov);
         }
     }
 }
@@ -85,7 +87,7 @@ pub fn mcts() {
             // if i > 0 { i -= 1; }
             let x0 = list[i].clone();
             let index = list0.iter().enumerate().find(|x| *x.1 == x0).unwrap().0;
-            let finish = game.move_by_tree_index(index as i32);
+            let finish = game.move_by_tree_index(index);
             if finish.is_some() {
                 print!("{:?}  {:?}\n", finish, game.position_history.borrow().list.len());
                 io::stdout().flush().unwrap();
@@ -157,7 +159,7 @@ pub fn main() {
             list.list.iter_mut().map(|x| {
                 let mut pos = game.current_position.make_move_and_get_position(x);
                 game.current_position.unmake_move(x);
-                pos.pos.evaluate();
+                pos.pos.evaluate(false);
                 pos
             }).collect()
         };

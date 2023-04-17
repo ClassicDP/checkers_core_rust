@@ -12,7 +12,7 @@ use crate::piece::Piece;
 use crate::PositionHistory::FinishType::{BlackWin, Draw1, Draw2, Draw3, Draw4, Draw5, WhiteWin};
 
 #[wasm_bindgen]
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Clone)]
 #[derive(TS)]
 #[ts(export)]
 pub struct PositionAndMove {

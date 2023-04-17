@@ -15,6 +15,7 @@ use crate::moves_list::MoveItem;
 pub struct Node {
     pub W: i64,
     pub N: i64,
+    pub average_game_len: f64,
     pub finish: Option<FinishType>,
     pub passed: bool,
     pub(crate) pos_mov: Rc<RefCell<PositionAndMove>>,
@@ -26,6 +27,7 @@ impl Node {
         Node {
             W: 0,
             N: 0,
+            average_game_len: 0.0,
             finish: None,
             passed: false,
             pos_mov: Rc::new(RefCell::new(pos_mov)),
@@ -62,6 +64,7 @@ impl McTree {
             root: Rc::new(RefCell::new(Node {
                 W: 0,
                 N: 0,
+                average_game_len: 0.0,
                 finish: None,
                 passed: false,
                 pos_mov: Rc::new(RefCell::new(PositionAndMove::from_pos(pos))),
@@ -126,29 +129,33 @@ impl McTree {
         let hist_len = self.history.borrow().len();
         fn back_propagation(mut res: i64, track: &mut Vec<Rc<RefCell<Node>>>,
                             history: &Rc<RefCell<PositionHistory>>, hist_len: usize) {
+            let mut g_len = 0.0;
             for node in track.iter().rev() {
                 let passed = node.borrow().childs.iter().all(|x| x.borrow().passed);
                 node.borrow_mut().passed = passed;
                 node.borrow_mut().W += res;
+                node.borrow_mut().average_game_len = {
+                    let avr = node.borrow().average_game_len;
+                    let n = node.borrow().N;
+                    (avr * n as f64 + g_len) / (n as f64 + 1.0)
+                };
+                g_len += 1.0;
                 res = -res;
             }
             history.borrow_mut().cut_to(hist_len);
             *track = vec![];
         }
         let mut pass = 0;
+        let u = |child: &Node, node: &Rc<RefCell<Node>>|
+            1.4 * f64::sqrt(f64::ln(node.borrow().N as f64) / (child.N as f64 + 1.0));
+        let u_max = |child: &Node, node: &Rc<RefCell<Node>>| {
+            child.W as f64 / (child.N as f64 + 1.0) + u(child, node)
+        };
         while pass < max_passes && self.root.borrow().finish.is_none() {
             let mut node = self.root.clone();
             loop {
                 node.borrow_mut().N += 1;
                 node.borrow_mut().expand();
-                let u = |child: &Node|
-                    1.4 * f64::sqrt(f64::ln(node.borrow().N as f64) / (child.N as f64 + 1.0));
-                let u_max = |child: &Node| {
-                    child.W as f64 / (child.N as f64 + 1.0) + u(child) + {
-                        0.0
-                        // if child.pos_mov.as_ref().borrow().mov.as_ref().unwrap().strike.is_some() { 1000.0 } else { 0.0 }
-                    }
-                };
                 let mut childs = node.borrow().childs.clone();
 
                 pass += 1;
@@ -157,11 +164,33 @@ impl McTree {
                     if z_ch.len() > 0 {
                         z_ch[rand::thread_rng().gen_range(0..z_ch.len())].clone()
                     } else {
-                        childs.sort_by(|a, b|
-                            if u_max(&*a.borrow()) < u_max(&*b.borrow())
-                            { Ordering::Less } else { Ordering::Greater });
-                        node.borrow_mut().childs = childs;
-                        node.borrow().childs.last().unwrap().clone()
+                        let node_max = childs.iter().max_by(|a, b|
+                            if u_max(&*a.borrow(), &node) < u_max(&*b.borrow(), &node)
+                            { Ordering::Less } else { Ordering::Greater }).unwrap();
+                        node_max.clone()
+                        // let umax = u_max(&*node_max.borrow(), &node);
+                        // let eq_nodes = childs.iter().filter(|x| {
+                        //     let x_umax = u_max(&*x.borrow(), &node);
+                        //     // ~5% -> equal
+                        //     f64::abs((umax - x_umax) / (umax + x_umax)) < 0.0025
+                        // });
+                        // if eq_nodes.clone().collect::<Vec<_>>().len() > 1 {
+                        //     print!("{:?} {:?}\n", eq_nodes.clone().collect::<Vec<_>>().len(), node.borrow().average_game_len);
+                        // }
+                        // let eq_list = eq_nodes.collect::<Vec<_>>();
+                        // eq_list[rand::thread_rng().gen_range(0..eq_list.len())].clone()
+                        // if node_max.borrow().W > 0 {
+                        //     eq_nodes.min_by(|x,y|
+                        //         (x.borrow().average_game_len).total_cmp(&y.borrow().average_game_len)).unwrap().clone()
+                        // } else {
+                        //     eq_nodes.max_by(|x,y|
+                        //         (x.borrow().average_game_len).total_cmp(&y.borrow().average_game_len)).unwrap().clone()
+                        // }
+
+
+                        //
+                        // node.borrow_mut().childs = childs;
+                        // node.borrow().childs.last().unwrap().clone()
                     }
                 };
                 let hist_finish = self.history.borrow_mut().push_rc(node.borrow().pos_mov.clone());
@@ -191,8 +220,11 @@ impl McTree {
             panic!("finish achieved")
         }
         if self.root.borrow().childs.len() > 0 {
-            self.root.borrow().childs.iter().max_by(|x, y|
-                x.borrow().N.cmp(&y.borrow().N)).unwrap().clone()
+            let node = self.root.clone();
+            self.root.borrow().childs.iter().max_by(|a, b|
+                // if u_max(&*a.borrow(), &node) < u_max(&*b.borrow(), &node)
+                // { Ordering::Less } else { Ordering::Greater }).unwrap().clone()
+                a.borrow().W.cmp(&b.borrow().W)).unwrap().clone()
         } else {
             panic!("no childs")
         }

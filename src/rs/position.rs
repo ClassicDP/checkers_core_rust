@@ -316,7 +316,7 @@ impl Position {
         false
     }
 
-    pub fn evaluate(&mut self) -> i32 {
+    pub fn evaluate(&mut self, state_only: bool) -> i32 {
         if self.eval.is_some() { return self.eval.unwrap(); }
         // white advantage if positive signature of evaluate, black - negative
         let mut eval: i32 =
@@ -326,32 +326,34 @@ impl Position {
                 } else { i32::MAX / 2 }
             } else { 0 };
 
-        for cell in &self.cells {
-            if let Some(ref piece) = cell {
-                let v = self.get_vectors(piece, &vec![], false);
-                let empir = rand::thread_rng().gen_range(9..10);
-                let s = if piece.color == Color::White { empir } else { -empir };
-                if !piece.is_king {
-                    // let row = (piece.pos * 2 / self.environment.size as usize) as i32;
-                    // let progress = if piece.color == Color::White { row } else { row - self.environment.size as i32 };
-                    // eval += progress;
-                    v.iter().for_each(|v|
-                        {
-                            for point in &(v.points)[1..usize::min(3, v.points.len())] {
-                                if let Some(neighbour) = &self.cells[*point] {
-                                    if neighbour.color == piece.color { eval += s as i32; } else { break; }
+        if !state_only {
+            for cell in &self.cells {
+                if let Some(ref piece) = cell {
+                    let v = self.get_vectors(piece, &vec![], false);
+                    let empir = rand::thread_rng().gen_range(9..10);
+                    let s = if piece.color == Color::White { empir } else { -empir };
+                    if !piece.is_king {
+                        // let row = (piece.pos * 2 / self.environment.size as usize) as i32;
+                        // let progress = if piece.color == Color::White { row } else { row - self.environment.size as i32 };
+                        // eval += progress;
+                        v.iter().for_each(|v|
+                            {
+                                for point in &(v.points)[1..usize::min(3, v.points.len())] {
+                                    if let Some(neighbour) = &self.cells[*point] {
+                                        if neighbour.color == piece.color { eval += s as i32; } else { break; }
+                                    }
                                 }
-                            }
-                            // opposition
-                            if v.points.len() > 1 && self.cells[v.points[1]].is_none() {
-                                eval += s * 2;
-                            }
-                        })
+                                // opposition
+                                if v.points.len() > 1 && self.cells[v.points[1]].is_none() {
+                                    eval += s * 2;
+                                }
+                            })
+                    }
+                    // for point in &(v.points)[1..] {
+                    //     if self.cells[*point].is_some() { break; }
+                    //     eval += s as i32;
+                    // })
                 }
-                // for point in &(v.points)[1..] {
-                //     if self.cells[*point].is_some() { break; }
-                //     eval += s as i32;
-                // })
             }
         }
         eval += self.state.evaluate();

@@ -5,6 +5,7 @@
 export enum Method {
   Deep = 0,
   MCTS = 1,
+  Mix = 2,
 }
 /**
 */
@@ -79,9 +80,15 @@ export class Game {
 * @param {number} best_white
 * @param {number} best_black
 * @param {number} depth
+* @param {boolean} state_only
 * @returns {BestPos}
 */
-  best_move(max_depth: number, best_white: number, best_black: number, depth: number): BestPos;
+  best_move(max_depth: number, best_white: number, best_black: number, depth: number, state_only: boolean): BestPos;
+/**
+* @param {boolean} apply
+* @returns {BestPos}
+*/
+  mix_method(apply: boolean): BestPos;
 /**
 * @param {boolean} apply
 * @returns {any}
@@ -100,6 +107,13 @@ export class Game {
 * @returns {any}
 */
   find_mcts_and_make_best_move_ts_n(apply: boolean): any;
+/**
+* @returns {MCTSRes | undefined}
+*/
+  check_tree_for_finish(): MCTSRes | undefined;
+/**
+*/
+  preparing_tree(): void;
 /**
 * @param {boolean} apply
 * @returns {MCTSRes}

@@ -49,6 +49,28 @@ function addHeapObject(obj) {
     return idx;
 }
 
+function isLikeNone(x) {
+    return x === undefined || x === null;
+}
+
+let cachedFloat64Memory0 = null;
+
+function getFloat64Memory0() {
+    if (cachedFloat64Memory0 === null || cachedFloat64Memory0.byteLength === 0) {
+        cachedFloat64Memory0 = new Float64Array(wasm.memory.buffer);
+    }
+    return cachedFloat64Memory0;
+}
+
+let cachedInt32Memory0 = null;
+
+function getInt32Memory0() {
+    if (cachedInt32Memory0 === null || cachedInt32Memory0.byteLength === 0) {
+        cachedInt32Memory0 = new Int32Array(wasm.memory.buffer);
+    }
+    return cachedInt32Memory0;
+}
+
 let WASM_VECTOR_LEN = 0;
 
 let cachedTextEncoder = new TextEncoder('utf-8');
@@ -102,28 +124,6 @@ function passStringToWasm0(arg, malloc, realloc) {
 
     WASM_VECTOR_LEN = offset;
     return ptr;
-}
-
-function isLikeNone(x) {
-    return x === undefined || x === null;
-}
-
-let cachedInt32Memory0 = null;
-
-function getInt32Memory0() {
-    if (cachedInt32Memory0 === null || cachedInt32Memory0.byteLength === 0) {
-        cachedInt32Memory0 = new Int32Array(wasm.memory.buffer);
-    }
-    return cachedInt32Memory0;
-}
-
-let cachedFloat64Memory0 = null;
-
-function getFloat64Memory0() {
-    if (cachedFloat64Memory0 === null || cachedFloat64Memory0.byteLength === 0) {
-        cachedFloat64Memory0 = new Float64Array(wasm.memory.buffer);
-    }
-    return cachedFloat64Memory0;
 }
 
 let cachedBigInt64Memory0 = null;
@@ -228,7 +228,7 @@ function getArrayU8FromWasm0(ptr, len) {
 }
 /**
 */
-module.exports.Method = Object.freeze({ Deep:0,"0":"Deep",MCTS:1,"1":"MCTS", });
+module.exports.Method = Object.freeze({ Deep:0,"0":"Deep",MCTS:1,"1":"MCTS",Mix:2,"2":"Mix", });
 /**
 */
 module.exports.FinishType = Object.freeze({ Draw1:0,"0":"Draw1",Draw2:1,"1":"Draw2",Draw3:2,"2":"Draw3",Draw4:3,"3":"Draw4",Draw5:4,"4":"Draw5",BlackWin:5,"5":"BlackWin",WhiteWin:6,"6":"WhiteWin", });
@@ -350,10 +350,19 @@ class Game {
     * @param {number} best_white
     * @param {number} best_black
     * @param {number} depth
+    * @param {boolean} state_only
     * @returns {BestPos}
     */
-    best_move(max_depth, best_white, best_black, depth) {
-        const ret = wasm.game_best_move(this.ptr, max_depth, best_white, best_black, depth);
+    best_move(max_depth, best_white, best_black, depth, state_only) {
+        const ret = wasm.game_best_move(this.ptr, max_depth, best_white, best_black, depth, state_only);
+        return BestPos.__wrap(ret);
+    }
+    /**
+    * @param {boolean} apply
+    * @returns {BestPos}
+    */
+    mix_method(apply) {
+        const ret = wasm.game_mix_method(this.ptr, apply);
         return BestPos.__wrap(ret);
     }
     /**
@@ -385,6 +394,18 @@ class Game {
     find_mcts_and_make_best_move_ts_n(apply) {
         const ret = wasm.game_find_mcts_and_make_best_move_ts_n(this.ptr, apply);
         return takeObject(ret);
+    }
+    /**
+    * @returns {MCTSRes | undefined}
+    */
+    check_tree_for_finish() {
+        const ret = wasm.game_check_tree_for_finish(this.ptr);
+        return ret === 0 ? undefined : MCTSRes.__wrap(ret);
+    }
+    /**
+    */
+    preparing_tree() {
+        wasm.game_preparing_tree(this.ptr);
     }
     /**
     * @param {boolean} apply
@@ -788,6 +809,18 @@ module.exports.__wbindgen_object_drop_ref = function(arg0) {
     takeObject(arg0);
 };
 
+module.exports.__wbindgen_string_new = function(arg0, arg1) {
+    const ret = getStringFromWasm0(arg0, arg1);
+    return addHeapObject(ret);
+};
+
+module.exports.__wbindgen_number_get = function(arg0, arg1) {
+    const obj = getObject(arg1);
+    const ret = typeof(obj) === 'number' ? obj : undefined;
+    getFloat64Memory0()[arg0 / 8 + 1] = isLikeNone(ret) ? 0 : ret;
+    getInt32Memory0()[arg0 / 4 + 0] = !isLikeNone(ret);
+};
+
 module.exports.__wbindgen_error_new = function(arg0, arg1) {
     const ret = new Error(getStringFromWasm0(arg0, arg1));
     return addHeapObject(ret);
@@ -842,18 +875,6 @@ module.exports.__wbindgen_boolean_get = function(arg0) {
     const v = getObject(arg0);
     const ret = typeof(v) === 'boolean' ? (v ? 1 : 0) : 2;
     return ret;
-};
-
-module.exports.__wbindgen_string_new = function(arg0, arg1) {
-    const ret = getStringFromWasm0(arg0, arg1);
-    return addHeapObject(ret);
-};
-
-module.exports.__wbindgen_number_get = function(arg0, arg1) {
-    const obj = getObject(arg1);
-    const ret = typeof(obj) === 'number' ? obj : undefined;
-    getFloat64Memory0()[arg0 / 8 + 1] = isLikeNone(ret) ? 0 : ret;
-    getInt32Memory0()[arg0 / 4 + 0] = !isLikeNone(ret);
 };
 
 module.exports.__wbg_log_7529978016e706d9 = function(arg0, arg1) {

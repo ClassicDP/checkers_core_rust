@@ -1,9 +1,6 @@
 /* tslint:disable */
 /* eslint-disable */
 export const memory: WebAssembly.Memory;
-export function __wbg_moveitem_free(a: number): void;
-export function __wbg_movelist_free(a: number): void;
-export function __wbg_straightstrike_free(a: number): void;
 export function __wbg_mctsres_free(a: number): void;
 export function __wbg_bestpos_free(a: number): void;
 export function __wbg_game_free(a: number): void;
@@ -15,11 +12,14 @@ export function game_insert_piece(a: number, b: number): void;
 export function game_remove_piece(a: number, b: number): number;
 export function game_position(a: number): number;
 export function game_make_move_by_move_item(a: number, b: number): number;
-export function game_best_move(a: number, b: number, c: number, d: number, e: number): number;
+export function game_best_move(a: number, b: number, c: number, d: number, e: number, f: number): number;
+export function game_mix_method(a: number, b: number): number;
 export function game_get_or_apply_best_move(a: number, b: number): number;
 export function game_make_best_move(a: number, b: number): void;
 export function game_find_and_make_best_move_ts_n(a: number): number;
 export function game_find_mcts_and_make_best_move_ts_n(a: number, b: number): number;
+export function game_check_tree_for_finish(a: number): number;
+export function game_preparing_tree(a: number): void;
 export function game_find_mcts_and_make_best_move(a: number, b: number): number;
 export function game_get_board_list_ts_n(a: number): number;
 export function game_mov_back(a: number): void;
@@ -35,6 +35,9 @@ export function game_get_color(a: number): number;
 export function game_set_color(a: number, b: number): void;
 export function game_make_move_for_front(a: number, b: number, c: number): void;
 export function game_make_move_by_pos_item(a: number, b: number): void;
+export function __wbg_moveitem_free(a: number): void;
+export function __wbg_movelist_free(a: number): void;
+export function __wbg_straightstrike_free(a: number): void;
 export function __wbg_positionenvironment_free(a: number): void;
 export function __wbg_get_positionenvironment_size(a: number): number;
 export function __wbg_set_positionenvironment_size(a: number, b: number): void;
