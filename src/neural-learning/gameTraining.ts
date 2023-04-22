@@ -440,7 +440,7 @@ function formDataset(datasetItems: DatasetItem[], gamesCount: number, verbose: b
 
 		const gameProcess = new GameProcess(8)
 
-		gameProcess.game.set_mcts_lim(10000)
+		gameProcess.game.set_mcts_lim(200000)
 		const whitePosList = [0, 2, 4, 6, 9, 11, 13, 15, 16, 18, 20, 22]
 		const blackPosList = whitePosList.map(x => 63 - x)
 		whitePosList.forEach(x => gameProcess.insertPiece(x, Color.White, false))

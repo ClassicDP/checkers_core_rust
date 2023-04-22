@@ -49,14 +49,14 @@ pub fn deep_mcts() {
 
     loop {
         init(&mut game);
-        game.set_mcts_lim(100000);
-        game.set_depth(6);
+
         loop {
             let finish = game.position_history.borrow_mut().finish_check();
             if let Some(finish) = finish {
                 print!("{:?}  {:?}\n", finish, game.position_history.borrow().list.len());
                 break;
             }
+            game.set_depth(6);
             let best_move = game.get_best_move_rust();
             print!("{:?}\n", best_move.get_move_item());
             io::stdout().flush().unwrap();
@@ -66,6 +66,8 @@ pub fn deep_mcts() {
                 print!("{:?}  {:?}\n", finish, game.position_history.borrow().list.len());
                 break;
             };
+            game.set_mcts_lim(100000);
+            game.set_depth(5);
             let mov = game.mix_method(true).get_move_item();
             print!("{:?}\n", mov);
         }
