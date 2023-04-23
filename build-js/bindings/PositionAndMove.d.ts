@@ -3,4 +3,5 @@ import type { Position } from "./Position";
 export interface PositionAndMove {
     pos: Position;
     mov: MoveItem | null;
+    deep_eval: number | null;
 }

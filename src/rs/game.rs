@@ -212,20 +212,20 @@ impl Game {
             print!("strange list: {:?}\n",
                    best_move.pos_list.iter().map(|x|x.borrow().deep_eval).collect::<Vec<_>>());
         }
-        best_move.pos_list.sort_by(|x, y|
-            x.borrow().deep_eval.unwrap()
-                .cmp(&y.borrow().deep_eval.unwrap()));
-        let eval_max_min = best_move.pos_list.first().unwrap().borrow().pos.eval.unwrap();
+        best_move.pos_list.sort_by_key(|x|
+            x.borrow().deep_eval.unwrap());
 
-        if move_color == Black {
+
+        if move_color == White {
             best_move.pos_list.reverse();
         }
+        let eval_max_min = best_move.pos_list.first().unwrap().borrow().deep_eval.unwrap();
         print!("eval: {}\n", eval_max_min);
         let mut pos_list = vec![];
         for pos in best_move.pos_list.iter() {
             let condition = i32::abs(eval_max_min - pos.borrow().deep_eval.unwrap()) > 5000;
             if condition {
-                print!("break cond: {} {} {:?}\n", eval_max_min, pos.borrow().deep_eval.unwrap(), move_color);
+                print!("break cond: {} {} {:?}\n", eval_max_min, pos.borrow().deep_eval.unwrap(), pos_list.len());
                 break;
             }
             pos_list.push(pos.clone());
