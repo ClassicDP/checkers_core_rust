@@ -20,6 +20,9 @@ pub struct PositionAndMove {
     pub pos: Position,
     #[wasm_bindgen(skip)]
     pub mov: Option<MoveItem>,
+    #[wasm_bindgen(skip)]
+    pub deep_eval: Option<i32>,
+
 }
 
 impl PositionAndMove {
@@ -27,12 +30,14 @@ impl PositionAndMove {
         PositionAndMove {
             pos,
             mov: Option::from(mov),
+            deep_eval: None
         }
     }
     pub fn from_pos(pos: Position) -> PositionAndMove {
         PositionAndMove {
             pos,
             mov: None,
+            deep_eval: None
         }
     }
 

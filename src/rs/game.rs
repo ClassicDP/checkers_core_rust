@@ -33,7 +33,7 @@ pub struct MCTSRes {
 #[ts(export)]
 pub struct BestPos {
     pos: Option<Rc<RefCell<PositionAndMove>>>,
-    pos_list: Option<Vec<PositionAndMove>>,
+    pos_list: Vec<Rc<RefCell<PositionAndMove>>>,
     deep_eval: i32,
 }
 
@@ -131,40 +131,43 @@ impl Game {
     pub fn best_move(&mut self, mut max_depth: i16, mut best_white: i32,
                      mut best_black: i32, depth: i16, state_only: bool) -> BestPos {
         // log(&format!("{:?}", self.current_position));
+        let finish = self.position_history.borrow_mut().finish_check();
+        if finish.is_some() {
+            // print!("{:?} {}\n", finish, depth);
+            // pos_it.position.print_pos();
+            let pos_it = self.position_history.borrow_mut().last();
+            let eval = pos_it.borrow_mut().pos.evaluate(state_only);
+            pos_it.borrow_mut().deep_eval = Option::from(eval);
+            return BestPos { deep_eval: eval, pos_list: vec![pos_it.clone()], pos: Option::from(pos_it) };
+        }
         let ref move_list = self.current_position.get_move_list_cached();
         let mut pos_list: Vec<_> = {
             move_list.as_ref().as_ref().unwrap().list.iter().map(|x| {
                 let mut pos = self.current_position.make_move_and_get_position(x);
                 pos.pos.evaluate(state_only);
                 self.current_position.unmake_move(x);
-                pos
+                Rc::new(RefCell::new(pos))
             }).collect()
         };
         if pos_list.len() == 0 { panic!("Best move: it`s standoff position") }
         let move_color = self.current_position.next_move.unwrap();
         if pos_list.len() < 3 { max_depth += 1; }
-
         pos_list.sort_by_key(|x|
-            x.pos.eval.unwrap() * if move_color == White { -1 } else { 1 });
-        let res_pos_list = if depth > 0 { None } else { Some(pos_list.clone()) };
-        let mut best_pos = BestPos { pos: None, pos_list: res_pos_list.clone(),
-            deep_eval: if move_color == White { i32::MIN } else { i32::MAX } };
+            x.borrow().pos.eval.unwrap() * if move_color == White { -1 } else { 1 });
+        let res_pos_list = pos_list.clone();
+        let mut best_pos = BestPos {
+            pos: None,
+            pos_list: res_pos_list.clone(),
+            deep_eval: if move_color == White { i32::MIN } else { i32::MAX },
+        };
         if depth < max_depth {
-            for pos_it in pos_list {
-                self.current_position.make_move(&pos_it.mov.as_ref().unwrap());
-                self.position_history.borrow_mut().push(pos_it);
-                let finish = self.position_history.borrow_mut().finish_check();
-                if finish.is_some() {
-                    // print!("{:?} {}\n", finish, depth);
-                    // pos_it.position.print_pos();
-                    let pos_it = self.position_history.borrow_mut().pop().unwrap();
-                    self.current_position.unmake_move(&pos_it.borrow().mov.as_ref().unwrap());
-                    let eval = pos_it.borrow_mut().pos.evaluate(state_only);
-                    return BestPos { deep_eval: eval, pos_list: res_pos_list.clone(), pos: Option::from(pos_it) };
-                }
+            for pos_it in &pos_list {
+                self.current_position.make_move(pos_it.borrow().mov.as_ref().unwrap());
+                self.position_history.borrow_mut().push_rc(pos_it.clone());
                 let deep_eval =
                     self.best_move(max_depth, best_white, best_black, depth + 1, state_only).deep_eval;
                 let pos_it = self.position_history.borrow_mut().pop().unwrap();
+                pos_it.borrow_mut().deep_eval = Option::from(deep_eval);
                 self.current_position.took_pieces = pos_it.borrow().pos.took_pieces.clone();
                 self.current_position.unmake_move(&pos_it.borrow().mov.as_ref().unwrap());
                 let white = self.current_position.state.white.clone();
@@ -193,9 +196,10 @@ impl Game {
                 }
             }
         } else {
-            let mut pos = pos_list.pop().unwrap();
-            let eval = pos.pos.evaluate(state_only);
-            best_pos = BestPos { deep_eval: eval, pos_list: res_pos_list.clone(), pos: Some(Rc::from(RefCell::from(pos))) }
+            let pos = pos_list.pop().unwrap();
+            let eval = pos.borrow_mut().pos.evaluate(state_only);
+            best_pos = BestPos { deep_eval: eval, pos_list: res_pos_list.clone(),
+                pos: Some(pos) }
         }
         best_pos
     }
@@ -204,14 +208,24 @@ impl Game {
         let mut best_move =
             self.best_move(self.max_depth, i32::MIN, i32::MAX, 0, false);
         let move_color = self.current_position.next_move.unwrap();
-        best_move.pos_list.as_mut().unwrap().sort_by_key(|x| x.pos.eval.unwrap() * if move_color == White { -1 } else { 1 });
-        let eval_max_min = best_move.pos_list.clone().unwrap().first().unwrap().pos.eval.unwrap();
+        if best_move.pos_list.iter().any(|x|x.borrow().deep_eval.is_none()) {
+            print!("strange list: {:?}\n",
+                   best_move.pos_list.iter().map(|x|x.borrow().deep_eval).collect::<Vec<_>>());
+        }
+        best_move.pos_list.sort_by(|x, y|
+            x.borrow().deep_eval.unwrap()
+                .cmp(&y.borrow().deep_eval.unwrap()));
+        let eval_max_min = best_move.pos_list.first().unwrap().borrow().pos.eval.unwrap();
+
+        if move_color == Black {
+            best_move.pos_list.reverse();
+        }
         print!("eval: {}\n", eval_max_min);
         let mut pos_list = vec![];
-        for pos in best_move.pos_list.clone().unwrap().iter() {
-            let condition = i32::abs(eval_max_min - pos.pos.eval.unwrap()) > 5000;
+        for pos in best_move.pos_list.iter() {
+            let condition = i32::abs(eval_max_min - pos.borrow().deep_eval.unwrap()) > 5000;
             if condition {
-                print!("break cond: {} {}\n", eval_max_min, pos.pos.eval.unwrap());
+                print!("break cond: {} {} {:?}\n", eval_max_min, pos.borrow().deep_eval.unwrap(), move_color);
                 break;
             }
             pos_list.push(pos.clone());
@@ -222,7 +236,7 @@ impl Game {
         self.tree.as_mut().unwrap().root.borrow_mut().childs = {
             let mut ch_list = vec![];
             for child in self.tree.as_ref().unwrap().root.borrow().childs.clone() {
-                if pos_list.iter().any(|x| x.pos == child.borrow().pos_mov.borrow().pos)
+                if pos_list.iter().any(|x| x.borrow_mut().pos == child.borrow().pos_mov.borrow().pos)
                 { ch_list.push(child.clone()) }
             }
             ch_list
@@ -236,7 +250,7 @@ impl Game {
 
         let best_move = BestPos {
             pos: Option::from(node.borrow().pos_mov.clone()),
-            pos_list: None,
+            pos_list: vec![],
             deep_eval: 0,
         };
         if apply {
@@ -264,7 +278,7 @@ impl Game {
             }
             MCTS => {
                 let best = self.find_mcts_and_make_best_move(apply);
-                BestPos { pos: best.pos_move, pos_list: None, deep_eval: 0 }
+                BestPos { pos: best.pos_move, pos_list: vec![], deep_eval: 0 }
             }
             Method::Mix => {
                 self.mix_method(apply)
@@ -425,42 +439,42 @@ impl Game {
         }
 
         let board_list =
-        if apply {
-            // to boards list
-            let childs =
-                if !apply { node.clone().borrow().childs.clone() } else { self.tree.as_mut().unwrap().tree_childs() };
-            print!("to board list childs :{}\n", childs.len());
+            if apply {
+                // to boards list
+                let childs =
+                    if !apply { node.clone().borrow().childs.clone() } else { self.tree.as_mut().unwrap().tree_childs() };
+                print!("to board list childs :{}\n", childs.len());
 
-            let mut n_max =
-                childs.iter().max_by(|x, y|
-                    x.borrow().N.cmp(&y.borrow().N)).unwrap().borrow().N as i32;
-            let mut w_min =
-                childs.iter().min_by(|x, y|
-                    x.borrow().W.cmp(&y.borrow().W)).unwrap().borrow().W as i32;
-            let w_max =
-                childs.iter().max_by(|x, y|
-                    x.borrow().W.cmp(&y.borrow().W)).unwrap().borrow().W as i32;
-            let mut delta_w = w_max - w_min;
-            if delta_w == 0 {
-                delta_w = w_min;
-                w_min = w_min / 2;
-            }
-            if childs.len() == 1 { n_max *= 2; }
-            let mut board_list: Vec<Vec<i32>> = vec![];
-            for child in childs {
-                let mut board = vec![0 as i32; (self.position_environment.size * self.position_environment.size / 2) as usize];
-                for cell in &child.borrow().get_pos_mov().borrow().pos.cells {
-                    if let Some(piece) = cell {
-                        board[piece.pos] =
-                            (if piece.is_king { 3 } else { 1 }) * if piece.color == Color::White { 1 } else { -1 }
-                    }
+                let mut n_max =
+                    childs.iter().max_by(|x, y|
+                        x.borrow().N.cmp(&y.borrow().N)).unwrap().borrow().N as i32;
+                let mut w_min =
+                    childs.iter().min_by(|x, y|
+                        x.borrow().W.cmp(&y.borrow().W)).unwrap().borrow().W as i32;
+                let w_max =
+                    childs.iter().max_by(|x, y|
+                        x.borrow().W.cmp(&y.borrow().W)).unwrap().borrow().W as i32;
+                let mut delta_w = w_max - w_min;
+                if delta_w == 0 {
+                    delta_w = w_min;
+                    w_min = w_min / 2;
                 }
-                board.push(child.borrow().W as i32 - w_min);
-                board.push(delta_w);
-                board_list.push(board);
-            }
-            Some(board_list)
-        } else { None };
+                if childs.len() == 1 { n_max *= 2; }
+                let mut board_list: Vec<Vec<i32>> = vec![];
+                for child in childs {
+                    let mut board = vec![0 as i32; (self.position_environment.size * self.position_environment.size / 2) as usize];
+                    for cell in &child.borrow().get_pos_mov().borrow().pos.cells {
+                        if let Some(piece) = cell {
+                            board[piece.pos] =
+                                (if piece.is_king { 3 } else { 1 }) * if piece.color == Color::White { 1 } else { -1 }
+                        }
+                    }
+                    board.push(child.borrow().W as i32 - w_min);
+                    board.push(delta_w);
+                    board_list.push(board);
+                }
+                Some(board_list)
+            } else { None };
 
 
         return MCTSRes { finish: None, board_list, pos_move: Some(node.borrow().pos_mov.clone()) };
