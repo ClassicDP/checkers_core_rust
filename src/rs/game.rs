@@ -158,7 +158,7 @@ impl Game {
         let mut best_pos = BestPos {
             pos: None,
             pos_list: res_pos_list.clone(),
-            deep_eval: if move_color == White { i32::MIN } else { i32::MAX },
+            deep_eval: if move_color == White { i32::MIN / 2 } else { i32::MAX / 2 },
         };
         if depth < max_depth {
             for pos_it in &pos_list {
@@ -198,19 +198,22 @@ impl Game {
         } else {
             let pos = pos_list.pop().unwrap();
             let eval = pos.borrow_mut().pos.evaluate(state_only);
-            best_pos = BestPos { deep_eval: eval, pos_list: res_pos_list.clone(),
-                pos: Some(pos) }
+            best_pos = BestPos {
+                deep_eval: eval,
+                pos_list: res_pos_list.clone(),
+                pos: Some(pos),
+            }
         }
         best_pos
     }
 
     pub fn mix_method(&mut self, apply: bool) -> BestPos {
         let mut best_move =
-            self.best_move(self.max_depth, i32::MIN, i32::MAX, 0, false);
+            self.best_move(self.max_depth, i32::MIN / 2, i32::MAX / 2, 0, false);
         let move_color = self.current_position.next_move.unwrap();
-        if best_move.pos_list.iter().any(|x|x.borrow().deep_eval.is_none()) {
+        if best_move.pos_list.iter().any(|x| x.borrow().deep_eval.is_none()) {
             print!("strange list: {:?}\n",
-                   best_move.pos_list.iter().map(|x|x.borrow().deep_eval).collect::<Vec<_>>());
+                   best_move.pos_list.iter().map(|x| x.borrow().deep_eval).collect::<Vec<_>>());
         }
         best_move.pos_list.sort_by_key(|x|
             x.borrow().deep_eval.unwrap());
@@ -270,7 +273,7 @@ impl Game {
         }
         let best_move = match self.method {
             Deep => {
-                let best_move = self.best_move(self.max_depth, i32::MIN, i32::MAX, 0, false);
+                let best_move = self.best_move(self.max_depth, i32::MIN / 2, i32::MAX / 2, 0, false);
                 if apply {
                     self.make_best_move(&best_move);
                 }
@@ -328,7 +331,7 @@ impl Game {
                 Err(_err) => JsValue::UNDEFINED
             };
         }
-        let best_pos = self.best_move(self.max_depth, i32::MIN, i32::MAX, 0, false);
+        let best_pos = self.best_move(self.max_depth, i32::MIN / 2, i32::MAX / 2, 0, false);
         self.make_move_by_pos_item(&best_pos);
         let finish = self.position_history.borrow_mut().finish_check();
         if finish.is_some() {
@@ -539,7 +542,7 @@ impl Game {
 
     #[wasm_bindgen]
     pub fn get_best_move_rust(&mut self) -> BestPos {
-        self.best_move(self.max_depth, i32::MIN, i32::MAX, 0, false)
+        self.best_move(self.max_depth, i32::MIN / 2, i32::MAX / 2, 0, false)
     }
 
     pub fn state_(&self) -> String {

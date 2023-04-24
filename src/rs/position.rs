@@ -322,8 +322,8 @@ impl Position {
         let mut eval: i32 =
             if self.get_move_list_cached().as_ref().as_ref().unwrap().list.len() == 0 {
                 if self.next_move.is_some() && self.next_move.unwrap() == Color::White {
-                    i32::MIN / 2
-                } else { i32::MAX / 2 }
+                    i32::MIN / 4
+                } else { i32::MAX / 4 }
             } else { 0 };
 
         if !state_only {
