@@ -66,12 +66,12 @@ pub fn deep_mcts() {
                 print!("{:?}  {:?}\n", finish, game.position_history.borrow().list.len());
                 break;
             };
-            game.set_mcts_lim(200000);
-            game.find_mcts_and_make_best_move(true);
-            // game.set_depth(6);
             // game.set_mcts_lim(200000);
-            // // let mov = game.mix_method(true).get_move_item();
-            // print!("{:?}\n", mov);
+            // game.find_mcts_and_make_best_move(true);
+            game.set_depth(5);
+            game.set_mcts_lim(200000);
+            let mov = game.mix_method(true).get_move_item();
+            print!("{:?}\n", mov);
         }
     }
 }

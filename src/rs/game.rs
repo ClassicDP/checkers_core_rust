@@ -209,7 +209,7 @@ impl Game {
 
     pub fn mix_method(&mut self, apply: bool) -> BestPos {
         let mut best_move =
-            self.best_move(self.max_depth, i32::MIN / 2, i32::MAX / 2, 0, false);
+            self.best_move(self.max_depth, i32::MIN / 2, i32::MAX / 2, 0, true);
         let move_color = self.current_position.next_move.unwrap();
         if best_move.pos_list.iter().any(|x| x.borrow().deep_eval.is_none()) {
             print!("strange list: {:?}\n",
