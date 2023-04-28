@@ -84,10 +84,10 @@ pub fn deep_mcts() {
                 print!("{:?}  {:?}\n", finish, game.position_history.borrow().list.len());
                 break;
             };
-            game.set_mcts_lim(400000);
+            game.set_mcts_lim(600000);
             game.find_mcts_and_make_best_move(true);
-            // game.set_depth(3);
-            // game.set_mcts_lim(400000);
+            // game.set_depth(5);
+            // game.set_mcts_lim(300000);
             // game.mix_method(true);
             // print!("{:?}\n", mov.pos_move.unwrap().borrow().mov);
         }

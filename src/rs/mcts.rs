@@ -145,12 +145,12 @@ impl McTree {
         }
         let mut pass = 0;
         let u = |child: &Node, node: &Rc<RefCell<Node>>|
-            1.4 * f64::sqrt(f64::ln(node.borrow().N as f64) / (child.N as f64 + 1.0));
+             f64::sqrt(f64::ln(node.borrow().N as f64) / (child.N as f64 + 1.0));
         let u_max = |child: &Node, node: &Rc<RefCell<Node>>| {
-            child.W as f64 / (child.N as f64 + 1.0) + u(child, node)
+            0.7* child.W as f64 / (child.N as f64 + 1.0) + u(child, node)
         };
         let u_min = |child: &Node, node: &Rc<RefCell<Node>>| {
-            child.W as f64 / (child.N as f64 + 1.0) - u(child, node)
+            child.W as f64 / (child.N as f64 + 1.0) - u(child, node) / 2.0
         };
         let w_n = |a: &Rc<RefCell<Node>>| a.borrow().W as f64 / (1.0 + a.borrow().N as f64);
         while pass < max_passes && self.root.borrow().finish.is_none() {

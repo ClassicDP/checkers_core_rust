@@ -11,7 +11,7 @@ pub mod color;
 pub mod game;
 pub mod mcts;
 pub mod PositionHistory;
-
+mod cache_map;
 
 
 #[wasm_bindgen]
