@@ -44,6 +44,24 @@ pub fn init(game: &mut Game) {
     // game.current_position.next_move = Option::from(Color::White);
 }
 
+pub fn init_test(game: &mut Game) {
+    *game = Game::new(8);
+    vec![43].iter()
+        .for_each(|pos|
+            game.insert_piece(Piece::new(game.to_pack(*pos), Color::White, false)));
+    vec![50].iter()
+        .for_each(|pos|
+            game.insert_piece(Piece::new(game.to_pack(*pos), Color::Black, false)));
+    game.current_position.next_move = Option::from(Color::Black);
+    // vec![4].iter()
+    //     .for_each(|pos|
+    //         game.insert_piece(Piece::new(game.to_pack(*pos), Color::Black, true)));
+    // vec![0, 29, 34].iter()
+    //     .for_each(|pos|
+    //         game.insert_piece(Piece::new(game.to_pack(*pos), Color::White, true)));
+    // game.current_position.next_move = Option::from(Color::White);
+}
+
 pub fn deep_mcts() {
     let mut game = Game::new(8);
 
@@ -66,12 +84,12 @@ pub fn deep_mcts() {
                 print!("{:?}  {:?}\n", finish, game.position_history.borrow().list.len());
                 break;
             };
-            // game.set_mcts_lim(200000);
-            // game.find_mcts_and_make_best_move(true);
-            game.set_depth(5);
-            game.set_mcts_lim(200000);
-            let mov = game.mix_method(true).get_move_item();
-            print!("{:?}\n", mov);
+            game.set_mcts_lim(400000);
+            game.find_mcts_and_make_best_move(true);
+            // game.set_depth(3);
+            // game.set_mcts_lim(400000);
+            // game.mix_method(true);
+            // print!("{:?}\n", mov.pos_move.unwrap().borrow().mov);
         }
     }
 }
@@ -104,6 +122,37 @@ pub fn mcts() {
         }
     }
 }
+
+
+pub fn mcts_test() {
+    let mut game = Game::new(8);
+
+    init_test(&mut game);
+    loop {
+        let next = game.find_mcts_and_make_best_move(true);
+        if next.board_list.is_some() {
+            let list0 = next.board_list.unwrap();
+            let mut list = list0.clone();
+            let i = list[0].len() - 2;
+            list.sort_by(|x, y| x[i].cmp(&y[i]));
+            let mut i = list.len() - 1;
+            // if i > 0 { i -= 1; }
+            let x0 = list[i].clone();
+            let index = list0.iter().enumerate().find(|x| *x.1 == x0).unwrap().0;
+            let finish = game.move_by_tree_index(index);
+            if finish.is_some() {
+                print!("{:?}  {:?}\n", finish, game.position_history.borrow().list.len());
+                io::stdout().flush().unwrap();
+                init(&mut game);
+            }
+        } else {
+            print!("{:?}  {:?}\n", next.finish, game.position_history.borrow().list.len());
+            io::stdout().flush().unwrap();
+            init(&mut game);
+        }
+    }
+}
+
 
 pub fn random_game_test() {
     let v_w: Vec<_> = vec![0; 12].iter().enumerate()
@@ -144,6 +193,7 @@ pub fn random_game_test() {
 pub fn main() {
     deep_mcts();
     mcts();
+    mcts_test();
 
     return;
     // random_game_test();

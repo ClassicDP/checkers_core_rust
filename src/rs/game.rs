@@ -420,19 +420,20 @@ impl Game {
             return finish.unwrap();
         }
         self.preparing_tree();
-        let finish = self.check_tree_for_finish();
-        if finish.is_some() {
-            return finish.unwrap();
-        }
+        // let finish = self.check_tree_for_finish();
+        // if finish.is_some() {
+        //     return finish.unwrap();
+        // }
         if self.tree.as_ref().unwrap().root.borrow().pos_mov.borrow().pos != self.current_position {
             panic!("tree error");
         }
-        let node = if self.tree.as_mut().unwrap().root.borrow().childs.len() == 1 {
-            self.tree.as_mut().unwrap().root.borrow().childs[0].clone()
-        } else {
-            // Search in tree
-            self.tree.as_mut().unwrap().search(self.mcts_lim)
-        };
+        // let node = if self.tree.as_mut().unwrap().root.borrow().childs.len() == 1 {
+        //     self.tree.as_mut().unwrap().root.borrow().childs[0].clone()
+        // } else {
+        //     // Search in tree
+        //     self.tree.as_mut().unwrap().search(self.mcts_lim)
+        // };
+        let node = self.tree.as_mut().unwrap().search(self.mcts_lim);
         if apply {
             self.apply_node_move(node.clone());
         }

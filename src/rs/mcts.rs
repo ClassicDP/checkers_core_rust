@@ -4,11 +4,9 @@ use std::rc::Rc;
 use crate::position::{Position};
 use crate::PositionHistory::{FinishType, PositionAndMove, PositionHistory};
 use rand::{Rng};
-use schemars::_private::NoSerialize;
 use crate::{color, log};
 use crate::color::Color;
 use crate::color::Color::{Black, White};
-use crate::game::MCTSRes;
 use crate::moves_list::MoveItem;
 
 #[derive(Debug)]
@@ -151,12 +149,16 @@ impl McTree {
         let u_max = |child: &Node, node: &Rc<RefCell<Node>>| {
             child.W as f64 / (child.N as f64 + 1.0) + u(child, node)
         };
+        let u_min = |child: &Node, node: &Rc<RefCell<Node>>| {
+            child.W as f64 / (child.N as f64 + 1.0) - u(child, node)
+        };
+        let w_n = |a: &Rc<RefCell<Node>>| a.borrow().W as f64 / (1.0 + a.borrow().N as f64);
         while pass < max_passes && self.root.borrow().finish.is_none() {
             let mut node = self.root.clone();
             loop {
                 node.borrow_mut().N += 1;
                 node.borrow_mut().expand();
-                let mut childs = node.borrow().childs.clone();
+                let childs = node.borrow().childs.clone();
 
                 pass += 1;
                 node = {
@@ -224,7 +226,8 @@ impl McTree {
             self.root.borrow().childs.iter().max_by(|a, b|
                 // if u_max(&*a.borrow(), &node) < u_max(&*b.borrow(), &node)
                 // { Ordering::Less } else { Ordering::Greater }).unwrap().clone()
-                a.borrow().W.cmp(&b.borrow().W)).unwrap().clone()
+                if u_min(&a.borrow(), &self.root) <
+                    u_min(&b.borrow(), &self.root) { Ordering::Less } else { Ordering::Greater }).unwrap().clone()
         } else {
             panic!("no childs")
         }
