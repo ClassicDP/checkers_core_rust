@@ -15,7 +15,7 @@ impl Color {
 }
 
 #[wasm_bindgen]
-#[derive(Copy, Clone, PartialOrd, Serialize, Deserialize, Debug)]
+#[derive(Copy, Clone, PartialOrd, Serialize, Deserialize, Debug, Hash)]
 #[derive(PartialEq, Eq)]
 #[derive(TS)]
 #[ts(export)]

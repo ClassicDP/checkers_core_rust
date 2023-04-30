@@ -1,4 +1,5 @@
 use std::cmp::Ordering;
+use std::hash::{Hash, Hasher};
 use std::io;
 use std::io::Write;
 use std::mem::swap;
@@ -96,10 +97,11 @@ pub struct Position {
     pub took_pieces: Vec<Option<Piece>>,
 }
 
+
 impl PartialEq for Position {
     fn eq(&self, other: &Self) -> bool {
-        self.cells.iter().enumerate().all(|(i, x)| Some(&other.cells[i]) == Some(&x))
-            && self.next_move == other.next_move
+        self.next_move == other.next_move &&
+            self.cells.iter().enumerate().all(|(i, x)| Some(&other.cells[i]) == Some(&x))
     }
 }
 
@@ -474,10 +476,15 @@ impl Position {
         }
         move_list
     }
+
+    fn map_key (&self) -> (Vec<Option<Piece>>, Option<Color>) {
+        (self.cells.clone(), self.next_move)
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use crate::color::Color;
     use crate::game::Game;
     use crate::piece::Piece;
@@ -505,5 +512,6 @@ mod tests {
         g1.remove_piece(3);
         g2.remove_piece(3);
         assert_eq!(g1.current_position, g2.current_position);
+        assert_eq!(g1.current_position.map_key(), g2.current_position.map_key());
     }
 }

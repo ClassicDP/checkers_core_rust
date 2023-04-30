@@ -30,6 +30,7 @@ serde_derive = "1.0.66"
 crossbeam = "0.8.2"
 rayon = "1.6.1"
 rand = "0.8.5"
+serde_with = "2.3.3"
 
 [[bin]]
 name = "main"
