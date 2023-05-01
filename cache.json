@@ -1,1 +1,1 @@
-[{"item":[2,2,2,2],"repetitions":1,"index":0},{"item":[3,3,3,3],"repetitions":0,"index":1}]
+{"v":[{"item":[3,3,3,3],"repetitions":0,"array_pointer":0},{"item":[2,2,2,2],"repetitions":1,"array_pointer":1}],"data_size":2,"max_size":2,"p":1}
