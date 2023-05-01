@@ -33,8 +33,8 @@ impl<T> LoopArray<T>
         self.p = (self.p + self.data_size - 1) % self.data_size;
     }
 
-    pub fn next_loop_p(&mut self) -> Option<usize> {
-        let p = (self.p + 1) % self.data_size;
+    pub fn next_loop_p(&mut self, p: usize) -> Option<usize> {
+        let p = (p + 1) % self.data_size;
         if p == self.p { None } else { Some(p) }
     }
 
@@ -56,6 +56,14 @@ impl<T> LoopArray<T>
 
     fn i(&self, i: usize) -> usize {
         (i + self.p + self.max_size - self.data_size) % self.max_size
+    }
+
+    pub fn get_list(&self) -> Vec<&T> {
+        let mut v: Vec<&T> = vec![];
+        for i in 0..self.data_size {
+            v.push(&self.at(i));
+        }
+        v
     }
 
     fn get_index(&self, pointer: usize) -> usize {

@@ -91,8 +91,7 @@ impl<K, FK, T> CacheMap<K, FK, T>
         if let Some(v) = v {
             v.borrow_mut().repeat();
             let i = v.borrow_mut().get_array_pointer();
-            let i_next = self.freq_list.next_loop_p();
-            print!("{:?}", i_next);
+            let i_next = self.freq_list.next_loop_p(i);
             if i_next.is_some() {
                 let i_next = i_next.unwrap();
                 self.freq_list.swap(i, i_next);
@@ -183,21 +182,32 @@ mod tests {
         let a1 = vec![1, 1, 1, 1];
         let a2 = vec![2, 2, 2, 2];
         let a3 = vec![3, 3, 3, 3];
-        let mut cache_map = CacheMap::new(|x: &Vec<i32>| x.clone(), 2);
-        cache_map.insert(a1);
+        let a4 = vec![4, 4, 4, 4];
+        let mut cache_map = CacheMap::new(|x: &Vec<i32>| x.clone(), 3);
+        cache_map.insert(a1.clone());
         cache_map.insert(a2.clone());
-        print!("{:?}\n", cache_map.freq_list);
-        cache_map.insert(a2);
-        print!("{:?}\n", cache_map.freq_list);
         cache_map.insert(a3.clone());
-        print!("{:?}\n", cache_map.freq_list);
+        cache_map.insert(a2.clone());
+        print!("{:?}\n", cache_map.freq_list.get_list());
+        assert_eq!(cache_map.freq_list.at(2).as_ref().unwrap().borrow_mut().item, a2);
+        cache_map.insert(a1.clone());
+        assert_eq!(cache_map.freq_list.at(1).as_ref().unwrap().borrow_mut().item, a1);
+        print!("{:?}\n", cache_map.freq_list.get_list());
+        cache_map.insert(a2.clone());
+        assert_eq!(cache_map.freq_list.at(2).as_ref().unwrap().borrow_mut().item, a2);
+        print!("{:?}\n", cache_map.freq_list.get_list());
         cache_map.write("cache.json".to_string());
-        let mut new_cache = CacheMap::from_file("cache.json".to_string(), |x: &Vec<i32>| x.clone(), 20);
-        new_cache.insert(a3.clone());
-        new_cache.insert(a3);
-        for i in 0..new_cache.freq_list.data_size {
-            print!("{:?} ", new_cache.freq_list.at(i));
-        }
+        let mut new_cache = CacheMap::from_file("cache.json".to_string(), |x: &Vec<i32>| x.clone(), 3);
+        print!("{:?}\n", new_cache.freq_list.get_list());
+        new_cache.insert(a1.clone());
+        print!("{:?}\n", new_cache.freq_list.get_list());
+        new_cache.insert(a2);
+        print!("{:?}\n", new_cache.freq_list.get_list());
+        new_cache.insert(a4.clone());
+        print!("{:?}\n", new_cache.freq_list.get_list());
+        assert_eq!(new_cache.freq_list.at(0).as_ref().unwrap().borrow_mut().item, a1);
+        assert_eq!(new_cache.freq_list.at(2).as_ref().unwrap().borrow_mut().item, a4);
+
 
     }
 }
