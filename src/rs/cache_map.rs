@@ -100,9 +100,11 @@ impl<K, T> CacheMap<K, T>
     }
 
     pub fn insert(&mut self, x: T) {
-        let v = self.map.get(&(self.key_fn.unwrap())(&x));
+        let key = &(self.key_fn.unwrap())(&x);
+        let v = self.map.get(key);
         if let Some(v) = v {
             v.borrow_mut().repeat();
+            v.borrow_mut().item = x;
             let i = v.borrow_mut().get_array_pointer();
             let i_next = self.freq_list.next_loop_p(i);
             if i_next.is_some() {

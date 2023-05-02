@@ -84,7 +84,7 @@ pub fn deep_mcts() {
                 print!("{:?}  {:?}\n", finish, game.position_history.borrow().list.len());
                 break;
             };
-            game.set_mcts_lim(200000);
+            game.set_mcts_lim(400000);
             game.find_mcts_and_make_best_move(true);
             // let cache = game.tree.as_ref().unwrap().cache.clone();
             // cache.borrow_mut().freq_list.v.sort_by_key(|x|
@@ -98,7 +98,7 @@ pub fn deep_mcts() {
             // game.mix_method(true);
             // print!("{:?}\n", mov.pos_move.unwrap().borrow().mov);
             let cache = game.tree.as_ref().unwrap().cache.clone();
-            print!("{:?}", cache.borrow().freq_list.data_size);
+            print!("{:?}\n", cache.borrow().freq_list.data_size);
         }
         let cache = game.tree.as_ref().unwrap().cache.clone();
         cache.borrow_mut().freq_list.v.sort_by_key(|x|
@@ -106,7 +106,7 @@ pub fn deep_mcts() {
                 -x.borrow().repetitions
             } else { 0 }
         );
-        println!("_");
+        println!("{:?}\n", &cache.borrow().freq_list.v[..100]);
     }
 }
 

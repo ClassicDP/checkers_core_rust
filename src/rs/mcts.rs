@@ -13,6 +13,29 @@ use crate::moves_list::MoveItem;
 use crate::piece::Piece;
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct PositionWN {
+    pub cells: Vec<Option<Piece>>,
+    pub next_move: Color,
+    pub W: i64,
+    pub N: i64,
+}
+
+impl PositionWN {
+    pub fn fom_node(node: &Node) -> PositionWN {
+        PositionWN {
+            W: node.W,
+            N: node.N,
+            cells: node.pos_mov.borrow().pos.cells.clone(),
+            next_move: node.pos_mov.borrow().pos.next_move.unwrap(),
+        }
+    }
+
+    pub fn map_key(&self) -> (Vec<Option<Piece>>, Option<Color>) {
+        (self.cells.clone(), Some(self.next_move))
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Node {
     pub W: i64,
     pub N: i64,
@@ -57,7 +80,7 @@ impl Node {
 pub struct McTree {
     pub root: Rc<RefCell<Node>>,
     history: Rc<RefCell<PositionHistory>>,
-    pub cache: Rc<RefCell<CacheMap<PositionKey, Rc<RefCell<Node>>>>>
+    pub cache: Rc<RefCell<CacheMap<PositionKey, Rc<RefCell<PositionWN>>>>>,
 }
 
 impl McTree {
@@ -74,17 +97,16 @@ impl McTree {
             })),
             history,
             cache: Rc::new(RefCell::new(
-                CacheMap::new(|node: &Rc<RefCell<Node>>| node.borrow().pos_mov.borrow().pos.map_key(), 1_000_000)))
-
+                CacheMap::new(|pos_wn: &Rc<RefCell<PositionWN>>| pos_wn.borrow().map_key(), 1_000_000))),
         }
     }
 
     pub fn new_from_node(root: Rc<RefCell<Node>>, history: Rc<RefCell<PositionHistory>>, cache:
-    Rc<RefCell<CacheMap<PositionKey, Rc<RefCell<Node>>>>>) -> McTree {
+    Rc<RefCell<CacheMap<PositionKey, Rc<RefCell<PositionWN>>>>>) -> McTree {
         McTree {
             root,
             history,
-            cache
+            cache,
         }
     }
 
@@ -136,7 +158,7 @@ impl McTree {
         let hist_len = self.history.borrow().len();
         fn back_propagation(mut res: i64, track: &mut Vec<Rc<RefCell<Node>>>,
                             history: &Rc<RefCell<PositionHistory>>, hist_len: usize, cache:
-                            Rc<RefCell<CacheMap<PositionKey, Rc<RefCell<Node>>>>>) {
+                            Rc<RefCell<CacheMap<PositionKey, Rc<RefCell<PositionWN>>>>>) {
             let mut g_len = 0.0;
             for node in track.iter().rev() {
                 let passed = node.borrow().childs.iter().all(|x| x.borrow().passed);
@@ -147,7 +169,7 @@ impl McTree {
                     let n = node.borrow().N;
                     (avr * n as f64 + g_len) / (n as f64 + 1.0)
                 };
-                cache.borrow_mut().insert(node.clone());
+                cache.borrow_mut().insert(Rc::new(RefCell::new(PositionWN::fom_node(&node.borrow()))));
                 g_len += 1.0;
                 res = -res;
             }
