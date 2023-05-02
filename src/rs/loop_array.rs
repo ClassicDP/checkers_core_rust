@@ -6,7 +6,7 @@ pub struct LoopArray<T>
     where
         T: Serialize,
 {
-    pub v: Vec<T>,
+    pub v: Vec<Option<T>>,
     pub data_size: usize,
     pub max_size: usize,
     p: usize,
@@ -14,7 +14,7 @@ pub struct LoopArray<T>
 
 impl<T> LoopArray<T>
     where
-        T: Serialize,
+        T: Serialize + Clone,
 {
     pub fn new(max_size: usize) -> LoopArray<T> {
         LoopArray {
@@ -61,7 +61,7 @@ impl<T> LoopArray<T>
     pub fn get_list(&self) -> Vec<&T> {
         let mut v: Vec<&T> = vec![];
         for i in 0..self.data_size {
-            v.push(&self.at(i));
+            v.push(self.at(i).as_ref().unwrap());
         }
         v
     }
@@ -70,22 +70,23 @@ impl<T> LoopArray<T>
         (pointer + self.data_size + self.max_size - self.p) % self.max_size
     }
 
-    pub fn at(&self, i: usize) -> &T {
+    pub fn at(&self, i: usize) -> &Option<T> {
         &self.v[self.i(i)]
     }
 
     pub fn set(&mut self, i: usize, val: T) {
         if i < self.data_size {
             let ind = self.i(i);
-            self.v[ind] = val;
+            self.v[ind] = Some(val);
         }
     }
 
-    pub fn push(&mut self, val: T) -> usize {
-        self.v[self.p] = val;
+    pub fn push(&mut self, val: T) -> (Option<T>, usize) {
+        let old = self.v[self.p].clone();
+        self.v[self.p] = Some(val);
         let pointer = self.p;
         if self.data_size < self.max_size { self.data_size += 1; }
         self.next_p();
-        pointer
+        (old, pointer)
     }
 }

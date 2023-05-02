@@ -6,13 +6,14 @@ use ts_rs::*;
 use serde::Serialize;
 use std::cmp::Ordering;
 use std::rc::Rc;
+use serde_derive::Deserialize;
 use crate::color::Color::{Black, White};
 use crate::log;
 use crate::piece::Piece;
 use crate::PositionHistory::FinishType::{BlackWin, Draw1, Draw2, Draw3, Draw4, Draw5, WhiteWin};
 
 #[wasm_bindgen]
-#[derive(Serialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[derive(TS)]
 #[ts(export)]
 pub struct PositionAndMove {
@@ -214,7 +215,7 @@ impl PositionHistory {
 #[wasm_bindgen]
 #[derive(TS)]
 #[ts(export)]
-#[derive(Serialize, Debug, Clone)]
+#[derive(Serialize, Debug, Clone, Deserialize)]
 pub enum FinishType {
     Draw1,
     Draw2,

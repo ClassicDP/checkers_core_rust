@@ -1,12 +1,15 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
 use std::io::{Read, Write};
 use std::rc::Rc;
 use serde::{Deserialize, Serialize};
 use serde_json::to_writer;
 use serde_with::serde_as;
+use wasm_bindgen::prelude::wasm_bindgen;
 use crate::loop_array::LoopArray;
+use crate::position::{Position, PositionKey};
 
 trait Repetition {
     fn n(&self) -> i32;
@@ -16,9 +19,9 @@ trait Repetition {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct Wrapper<T> {
+pub struct Wrapper<T> {
     item: T,
-    repetitions: i32,
+    pub repetitions: i32,
     array_pointer: usize,
 }
 
@@ -50,44 +53,54 @@ impl<T> Repetition for Wrapper<T> {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde_as]
-struct CacheMap<K, FK, T>
+pub struct CacheMap<K, T>
     where
-        FK: Fn(&T) -> K,
         T: Serialize,
-        K: Hash + Eq + Serialize
+        K: Hash + Eq + Serialize + 'static
 
 {
-    freq_list: LoopArray<Option<Rc<RefCell<Wrapper<T>>>>>,
+    pub freq_list: LoopArray<Rc<RefCell<Wrapper<T>>>>,
     #[serde(skip_serializing)]
     map: HashMap<K, Rc<RefCell<Wrapper<T>>>>,
     size: usize,
     max_size: usize,
-    #[serde(skip_serializing)]
-    key_fn: FK,
+    #[serde(skip)]
+    key_fn: Option<KeyFn<T, K>>,
 }
 
-impl<K, FK, T> CacheMap<K, FK, T>
+impl<K, T> Debug for CacheMap<K, T>
+    where
+        T: Serialize + Debug,
+        K: Hash + Eq + Serialize + 'static
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", &format!("{:?}", self.freq_list))
+    }
+}
+
+pub type KeyFn<T, K> = fn(&T) -> K;
+
+impl<K, T> CacheMap<K, T>
     where
         T: Serialize + for<'d> Deserialize<'d>,
-        FK: Fn(&T) -> K,
         K: Hash + Eq + Serialize
 {
-    fn new(key_fn: FK, max_size: usize) -> CacheMap<K, FK, T> {
-        let mut v: LoopArray<Option<Rc<RefCell<Wrapper<T>>>>> = LoopArray::new(max_size);
+    pub fn new(key_fn: KeyFn<T, K>, max_size: usize) -> CacheMap<K, T> {
+        let mut v: LoopArray<Rc<RefCell<Wrapper<T>>>> = LoopArray::new(max_size);
         v.v.resize_with(max_size, || None);
         CacheMap {
             map: HashMap::new(),
             max_size,
             size: 0,
             freq_list: v,
-            key_fn,
+            key_fn: Some(key_fn),
         }
     }
 
     pub fn insert(&mut self, x: T) {
-        let v = self.map.get(&(self.key_fn)(&x));
+        let v = self.map.get(&(self.key_fn.unwrap())(&x));
         if let Some(v) = v {
             v.borrow_mut().repeat();
             let i = v.borrow_mut().get_array_pointer();
@@ -100,9 +113,13 @@ impl<K, FK, T> CacheMap<K, FK, T>
             }
         } else {
             let wrap = Rc::from(RefCell::from(Wrapper::new(x)));
-            let pointer = self.freq_list.push(Option::from(wrap.clone()));
+            let (old, pointer) = self.freq_list.push(wrap.clone());
+            if old.is_some() {
+                self.map.remove(
+                    &(self.key_fn.unwrap())(&old.as_ref().unwrap().as_ref().borrow().item));
+            }
             wrap.borrow_mut().set_list_pointer(pointer);
-            self.map.insert((self.key_fn)(&wrap.borrow().item), wrap.clone());
+            self.map.insert((self.key_fn.unwrap())(&wrap.borrow().item), wrap.clone());
         }
     }
 
@@ -113,11 +130,11 @@ impl<K, FK, T> CacheMap<K, FK, T>
         file.flush().expect("Write file error flush");
     }
 
-    fn from_file(f_name: String, key_fn: FK, max_size: usize) -> CacheMap<K, FK, T> {
+    fn from_file(f_name: String, key_fn: KeyFn<T, K>, max_size: usize) -> CacheMap<K, T> {
         let mut file = std::fs::File::open(f_name).expect("Open file error");
         let mut contents = String::new();
         file.read_to_string(&mut contents).expect("Read file error");
-        let mut freq_list: LoopArray<Option<Rc<RefCell<Wrapper<T>>>>> = serde_json::from_str(&contents).expect("Format data error");
+        let mut freq_list: LoopArray<Rc<RefCell<Wrapper<T>>>> = serde_json::from_str(&contents).expect("Format data error");
         let mut map = HashMap::new();
         for item in &freq_list.v {
             map.insert((key_fn)(&item.as_ref().unwrap().borrow().item), item.as_ref().unwrap().clone());
@@ -126,7 +143,7 @@ impl<K, FK, T> CacheMap<K, FK, T>
         freq_list.v.resize_with(max_size, || None);
         CacheMap {
             max_size,
-            key_fn,
+            key_fn: Some(key_fn),
             freq_list,
             map,
             size,
@@ -189,12 +206,12 @@ mod tests {
         cache_map.insert(a3.clone());
         cache_map.insert(a2.clone());
         print!("{:?}\n", cache_map.freq_list.get_list());
-        assert_eq!(cache_map.freq_list.at(2).as_ref().unwrap().borrow_mut().item, a2);
+        assert_eq!(cache_map.freq_list.at(2).as_ref().unwrap().as_ref().borrow_mut().item, a2);
         cache_map.insert(a1.clone());
-        assert_eq!(cache_map.freq_list.at(1).as_ref().unwrap().borrow_mut().item, a1);
+        assert_eq!(cache_map.freq_list.at(1).as_ref().unwrap().as_ref().borrow_mut().item, a1);
         print!("{:?}\n", cache_map.freq_list.get_list());
         cache_map.insert(a2.clone());
-        assert_eq!(cache_map.freq_list.at(2).as_ref().unwrap().borrow_mut().item, a2);
+        assert_eq!(cache_map.freq_list.at(2).as_ref().unwrap().as_ref().borrow_mut().item, a2);
         print!("{:?}\n", cache_map.freq_list.get_list());
         cache_map.write("cache.json".to_string());
         let mut new_cache = CacheMap::from_file("cache.json".to_string(), |x: &Vec<i32>| x.clone(), 3);
@@ -207,7 +224,5 @@ mod tests {
         print!("{:?}\n", new_cache.freq_list.get_list());
         assert_eq!(new_cache.freq_list.at(0).as_ref().unwrap().borrow_mut().item, a1);
         assert_eq!(new_cache.freq_list.at(2).as_ref().unwrap().borrow_mut().item, a4);
-
-
     }
 }

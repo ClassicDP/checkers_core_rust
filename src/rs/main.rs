@@ -84,13 +84,29 @@ pub fn deep_mcts() {
                 print!("{:?}  {:?}\n", finish, game.position_history.borrow().list.len());
                 break;
             };
-            game.set_mcts_lim(600000);
+            game.set_mcts_lim(200000);
             game.find_mcts_and_make_best_move(true);
+            // let cache = game.tree.as_ref().unwrap().cache.clone();
+            // cache.borrow_mut().freq_list.v.sort_by_key(|x|
+            //     if let Some(x) = x {
+            //         -x.borrow().repetitions
+            //     } else { 0 }
+            // );
+            // println!("_");
             // game.set_depth(5);
             // game.set_mcts_lim(300000);
             // game.mix_method(true);
             // print!("{:?}\n", mov.pos_move.unwrap().borrow().mov);
+            let cache = game.tree.as_ref().unwrap().cache.clone();
+            print!("{:?}", cache.borrow().freq_list.data_size);
         }
+        let cache = game.tree.as_ref().unwrap().cache.clone();
+        cache.borrow_mut().freq_list.v.sort_by_key(|x|
+            if let Some(x) = x {
+                -x.borrow().repetitions
+            } else { 0 }
+        );
+        println!("_");
     }
 }
 

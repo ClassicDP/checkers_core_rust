@@ -1,15 +1,18 @@
 use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::rc::Rc;
-use crate::position::{Position};
+use crate::position::{Position, PositionKey};
 use crate::PositionHistory::{FinishType, PositionAndMove, PositionHistory};
 use rand::{Rng};
+use serde_derive::{Deserialize, Serialize};
 use crate::{color, log};
+use crate::cache_map::CacheMap;
 use crate::color::Color;
 use crate::color::Color::{Black, White};
 use crate::moves_list::MoveItem;
+use crate::piece::Piece;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Node {
     pub W: i64,
     pub N: i64,
@@ -54,6 +57,7 @@ impl Node {
 pub struct McTree {
     pub root: Rc<RefCell<Node>>,
     history: Rc<RefCell<PositionHistory>>,
+    pub cache: Rc<RefCell<CacheMap<PositionKey, Rc<RefCell<Node>>>>>
 }
 
 impl McTree {
@@ -69,13 +73,18 @@ impl McTree {
                 childs: vec![],
             })),
             history,
+            cache: Rc::new(RefCell::new(
+                CacheMap::new(|node: &Rc<RefCell<Node>>| node.borrow().pos_mov.borrow().pos.map_key(), 1_000_000)))
+
         }
     }
 
-    pub fn new_from_node(root: Rc<RefCell<Node>>, history: Rc<RefCell<PositionHistory>>) -> McTree {
+    pub fn new_from_node(root: Rc<RefCell<Node>>, history: Rc<RefCell<PositionHistory>>, cache:
+    Rc<RefCell<CacheMap<PositionKey, Rc<RefCell<Node>>>>>) -> McTree {
         McTree {
             root,
             history,
+            cache
         }
     }
 
@@ -126,7 +135,8 @@ impl McTree {
         let mut track: Vec<Rc<RefCell<Node>>> = vec![];
         let hist_len = self.history.borrow().len();
         fn back_propagation(mut res: i64, track: &mut Vec<Rc<RefCell<Node>>>,
-                            history: &Rc<RefCell<PositionHistory>>, hist_len: usize) {
+                            history: &Rc<RefCell<PositionHistory>>, hist_len: usize, cache:
+                            Rc<RefCell<CacheMap<PositionKey, Rc<RefCell<Node>>>>>) {
             let mut g_len = 0.0;
             for node in track.iter().rev() {
                 let passed = node.borrow().childs.iter().all(|x| x.borrow().passed);
@@ -137,6 +147,7 @@ impl McTree {
                     let n = node.borrow().N;
                     (avr * n as f64 + g_len) / (n as f64 + 1.0)
                 };
+                cache.borrow_mut().insert(node.clone());
                 g_len += 1.0;
                 res = -res;
             }
@@ -145,9 +156,9 @@ impl McTree {
         }
         let mut pass = 0;
         let u = |child: &Node, node: &Rc<RefCell<Node>>|
-             f64::sqrt(f64::ln(node.borrow().N as f64) / (child.N as f64 + 1.0));
+            f64::sqrt(f64::ln(node.borrow().N as f64) / (child.N as f64 + 1.0));
         let u_max = |child: &Node, node: &Rc<RefCell<Node>>| {
-            0.7* child.W as f64 / (child.N as f64 + 1.0) + u(child, node)
+            0.7 * child.W as f64 / (child.N as f64 + 1.0) + u(child, node)
         };
         let u_min = |child: &Node, node: &Rc<RefCell<Node>>| {
             child.W as f64 / (child.N as f64 + 1.0) - u(child, node) / 2.0
@@ -213,7 +224,7 @@ impl McTree {
                                          let sing =
                                              if node.borrow().pos_mov.borrow().pos.next_move.unwrap() == Color::White { -1 } else { 1 };
                                          fr * sing
-                                     }, &mut track, &self.history, hist_len);
+                                     }, &mut track, &self.history, hist_len, self.cache.clone());
                     break;
                 }
             }

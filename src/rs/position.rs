@@ -81,7 +81,7 @@ impl PosState {
 }
 
 
-#[derive(Serialize, Debug, Clone)]
+#[derive(Serialize, Debug, Clone, Deserialize)]
 #[derive(TS)]
 #[ts(export)]
 pub struct Position {
@@ -96,6 +96,8 @@ pub struct Position {
     #[serde(skip_serializing)]
     pub took_pieces: Vec<Option<Piece>>,
 }
+
+pub type PositionKey = (Vec<Option<Piece>>, Option<Color>);
 
 
 impl PartialEq for Position {
@@ -477,7 +479,7 @@ impl Position {
         move_list
     }
 
-    fn map_key (&self) -> (Vec<Option<Piece>>, Option<Color>) {
+    pub fn map_key(&self) -> (Vec<Option<Piece>>, Option<Color>) {
         (self.cells.clone(), self.next_move)
     }
 }
