@@ -9,6 +9,7 @@ use crate::position::{Position, PositionKey};
 use crate::position_environment::PositionEnvironment;
 use ts_rs::*;
 use serde::Serialize;
+use crate::mcts::{Cache, PositionWN};
 use crate::color::Color::{Black, White};
 use crate::game::Method::{Deep, MCTS};
 use crate::{game, log};
@@ -372,11 +373,18 @@ impl Game {
     }
 
 
-    fn init_tree(&mut self) {
+    pub fn init_tree(&mut self) {
         if self.tree.is_none() {
             self.tree = Some(McTree::new(self.current_position.clone(), self.position_history.clone()));
         }
     }
+
+
+    pub fn resort_cache(&mut self) {
+        let cache = self.tree.as_ref().unwrap().cache.clone();
+        cache.borrow_mut().resort(|x|if x.is_some() {-x.unwrap().borrow().N} else { i64::MAX });
+    }
+
     pub fn check_tree_for_finish(&mut self) -> Option<MCTSRes> {
         self.init_tree();
         if self.tree.as_ref().unwrap().root.borrow().finish.is_some() {
@@ -384,6 +392,8 @@ impl Game {
         }
         None
     }
+
+
     pub fn preparing_tree(&mut self) {
         self.init_tree();
         if self.tree.as_ref().unwrap().root.borrow().pos_mov.borrow().pos != self.current_position {

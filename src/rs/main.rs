@@ -1,14 +1,16 @@
 use std::cell::RefCell;
+use std::cmp::Ordering;
 use std::io;
 use std::io::Write;
 use std::ops::Deref;
 use std::rc::Rc;
 use rand::{Rng, thread_rng};
 use checkers_core::game::Method;
+use crate::cache_map::CacheMap;
 use crate::color::Color;
 use crate::color::Color::Black;
 use crate::game::Game;
-use crate::mcts::{McTree, Node};
+use crate::mcts::{Cache, McTree, Node, PositionWN};
 use crate::piece::Piece;
 
 include!("lib.rs");
@@ -64,10 +66,14 @@ pub fn init_test(game: &mut Game) {
 
 pub fn deep_mcts() {
     let mut game = Game::new(8);
-
+    let mut cache = Rc::new(RefCell::new(CacheMap::from_file(
+        "cache.jsom".to_string(), |pos_wn: &Rc<RefCell<PositionWN>>| pos_wn.borrow().map_key(), 5_000_000)));
     loop {
         init(&mut game);
-
+        game.init_tree();
+        if game.tree.is_some() {
+            game.tree.as_mut().unwrap().set_cache(cache.clone());
+        }
         loop {
             let finish = game.position_history.borrow_mut().finish_check();
             if let Some(finish) = finish {
@@ -84,7 +90,7 @@ pub fn deep_mcts() {
                 print!("{:?}  {:?}\n", finish, game.position_history.borrow().list.len());
                 break;
             };
-            game.set_mcts_lim(400000);
+            game.set_mcts_lim(300000);
             game.find_mcts_and_make_best_move(true);
             // let cache = game.tree.as_ref().unwrap().cache.clone();
             // cache.borrow_mut().freq_list.v.sort_by_key(|x|
@@ -97,16 +103,16 @@ pub fn deep_mcts() {
             // game.set_mcts_lim(300000);
             // game.mix_method(true);
             // print!("{:?}\n", mov.pos_move.unwrap().borrow().mov);
-            let cache = game.tree.as_ref().unwrap().cache.clone();
-            print!("{:?}\n", cache.borrow().freq_list.data_size);
+            print!("{:?}\n", game.tree.as_ref().unwrap().cache.borrow_mut().freq_list.data_size);
         }
-        let cache = game.tree.as_ref().unwrap().cache.clone();
-        cache.borrow_mut().freq_list.v.sort_by_key(|x|
-            if let Some(x) = x {
-                -x.borrow().repetitions
-            } else { 0 }
-        );
-        println!("{:?}\n", &cache.borrow().freq_list.v[..100]);
+        cache = game.tree.as_ref().unwrap().cache.clone();
+        cache.borrow_mut().write("cache.json".to_string());
+        let list = &mut cache.borrow().freq_list.v.clone();
+        list.sort_by(|x,y| if x.is_some() && y.is_some() {
+            y.as_ref().unwrap().borrow().repetitions.cmp(&x.as_ref().unwrap().borrow().repetitions) } else {
+            if x.is_some() {Ordering::Less} else { Ordering::Greater }
+        });
+        println!("{:?}\n", &list[..10]);
     }
 }
 

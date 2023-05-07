@@ -11,6 +11,7 @@ use wasm_bindgen::prelude::wasm_bindgen;
 use crate::loop_array::LoopArray;
 use crate::position::{Position, PositionKey};
 
+
 trait Repetition {
     fn n(&self) -> i32;
     fn repeat(&mut self);
@@ -20,7 +21,7 @@ trait Repetition {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Wrapper<T> {
-    item: T,
+    pub item: T,
     pub repetitions: i32,
     array_pointer: usize,
 }
@@ -84,7 +85,7 @@ pub type KeyFn<T, K> = fn(&T) -> K;
 
 impl<K, T> CacheMap<K, T>
     where
-        T: Serialize + for<'d> Deserialize<'d>,
+        T: Serialize + for<'d> Deserialize<'d> + Clone,
         K: Hash + Eq + Serialize
 {
     pub fn new(key_fn: KeyFn<T, K>, max_size: usize) -> CacheMap<K, T> {
@@ -100,7 +101,7 @@ impl<K, T> CacheMap<K, T>
     }
 
     pub fn insert(&mut self, x: T) {
-        let key = &(self.key_fn.unwrap())(&x);
+        let key = &self.key(&x);
         let v = self.map.get(key);
         if let Some(v) = v {
             v.borrow_mut().repeat();
@@ -117,39 +118,79 @@ impl<K, T> CacheMap<K, T>
             let wrap = Rc::from(RefCell::from(Wrapper::new(x)));
             let (old, pointer) = self.freq_list.push(wrap.clone());
             if old.is_some() {
-                self.map.remove(
-                    &(self.key_fn.unwrap())(&old.as_ref().unwrap().as_ref().borrow().item));
+                let key = self.key(&old.as_ref().unwrap().as_ref().borrow().item);
+                self.map.remove(&key);
             }
             wrap.borrow_mut().set_list_pointer(pointer);
-            self.map.insert((self.key_fn.unwrap())(&wrap.borrow().item), wrap.clone());
+            let key = self.key(&wrap.borrow().item);
+            self.map.insert(key, wrap.clone());
         }
     }
 
+    pub fn key(&mut self, item: &T) -> K {
+        (self.key_fn.unwrap())(item)
+    }
 
-    fn write(&self, f_name: String) {
+    pub fn get(&mut self, key: &K) -> Option<Rc<RefCell<Wrapper<T>>>> {
+        let x = self.map.get(key);
+        if x.is_some() { Some(x.unwrap().clone()) } else { None }
+    }
+
+    pub fn resort<SK:Ord>(&mut self, sort_fn: fn(item: Option<T>) -> SK) {
+        self.freq_list.v.sort_by_key(|x| (sort_fn)(Some(x.as_ref().unwrap().borrow().item.clone())));
+        let list = self.freq_list.v.clone();
+        let mut cache_map = CacheMap::new(self.key_fn.unwrap(), self.max_size);
+        self.map = HashMap::new();
+        for x in list {
+            if x.is_some() { cache_map.insert(x.unwrap().borrow().item.clone()); }
+        }
+        self.freq_list = cache_map.freq_list;
+        self.map = cache_map.map;
+        self.size = cache_map.size;
+        self.max_size = cache_map.max_size;
+    }
+
+
+    pub fn write(&self, f_name: String) {
         let mut file = std::fs::File::create(f_name).expect("Open file error");
         to_writer(&file, &self.freq_list).expect("Write file error");
         file.flush().expect("Write file error flush");
     }
 
-    fn from_file(f_name: String, key_fn: KeyFn<T, K>, max_size: usize) -> CacheMap<K, T> {
-        let mut file = std::fs::File::open(f_name).expect("Open file error");
-        let mut contents = String::new();
-        file.read_to_string(&mut contents).expect("Read file error");
-        let mut freq_list: LoopArray<Rc<RefCell<Wrapper<T>>>> = serde_json::from_str(&contents).expect("Format data error");
-        let mut map = HashMap::new();
-        for item in &freq_list.v {
-            map.insert((key_fn)(&item.as_ref().unwrap().borrow().item), item.as_ref().unwrap().clone());
+    pub fn from_file(f_name: String, key_fn: KeyFn<T, K>, max_size: usize) -> CacheMap<K, T> {
+
+        let read_freq_list = || {
+            let mut file = std::fs::File::open(f_name)?;
+            let mut contents = String::new();
+            file.read_to_string(&mut contents)?;
+            let list: LoopArray<Rc<RefCell<Wrapper<T>>>> = serde_json::from_str(&contents)?;
+            Ok(list)
+        };
+        let freq_list: Result<LoopArray<Rc<RefCell<Wrapper<T>>>>, std::io::Error> = read_freq_list();
+        match freq_list {
+            Ok(mut freq_list) => {
+                let mut map = HashMap::new();
+                for item in &freq_list.v {
+                    map.insert((key_fn)(&item.as_ref().unwrap().borrow().item), item.as_ref().unwrap().clone());
+                }
+                let size = freq_list.v.len();
+                freq_list.v.resize_with(max_size, || None);
+                CacheMap {
+                    max_size,
+                    key_fn: Some(key_fn),
+                    freq_list,
+                    map,
+                    size,
+                }
+            }
+            _ => {
+                CacheMap::new(key_fn, max_size)
+            }
         }
-        let size = freq_list.v.len();
-        freq_list.v.resize_with(max_size, || None);
-        CacheMap {
-            max_size,
-            key_fn: Some(key_fn),
-            freq_list,
-            map,
-            size,
-        }
+
+
+
+
     }
 }
 
