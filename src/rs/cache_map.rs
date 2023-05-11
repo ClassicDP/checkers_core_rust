@@ -2,12 +2,13 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
-use std::io::{Read, Write};
+use std::io::{BufWriter, Read, Write};
 use std::rc::Rc;
 use serde::{Deserialize, Serialize};
 use serde_json::to_writer;
-use serde_with::serde_as;
 use wasm_bindgen::prelude::wasm_bindgen;
+use bincode::serialize_into;
+use serde_with::rust::maps_first_key_wins::serialize;
 use crate::loop_array::LoopArray;
 use crate::position::{Position, PositionKey};
 
@@ -55,7 +56,6 @@ impl<T> Repetition for Wrapper<T> {
 }
 
 #[derive(Serialize, Deserialize)]
-#[serde_as]
 pub struct CacheMap<K, T>
     where
         T: Serialize,
@@ -136,7 +136,7 @@ impl<K, T> CacheMap<K, T>
         if x.is_some() { Some(x.unwrap().clone()) } else { None }
     }
 
-    pub fn resort<SK:Ord>(&mut self, sort_fn: fn(item: Option<T>) -> SK) {
+    pub fn resort<SK: Ord>(&mut self, sort_fn: fn(item: Option<T>) -> SK) {
         self.freq_list.v.sort_by_key(|x| (sort_fn)(Some(x.as_ref().unwrap().borrow().item.clone())));
         let list = self.freq_list.v.clone();
         let mut cache_map = CacheMap::new(self.key_fn.unwrap(), self.max_size);
@@ -150,28 +150,42 @@ impl<K, T> CacheMap<K, T>
         self.max_size = cache_map.max_size;
     }
 
+    pub fn get_cache_json(&self) -> String {
+        serde_json::to_string(&self.freq_list).unwrap()
+    }
 
-    pub fn write(&self, f_name: String) {
-        let mut file = std::fs::File::create(f_name).expect("Open file error");
-        to_writer(&file, &self.freq_list).expect("Write file error");
-        file.flush().expect("Write file error flush");
+    pub fn write(&mut self, f_name: String) {
+        let s = self.get_cache_json();
+        let mut f = BufWriter::new(std::fs::File::create(f_name).unwrap());
+        f.write(s.as_ref()).unwrap();
+        f.flush().unwrap();
     }
 
     pub fn from_file(f_name: String, key_fn: KeyFn<T, K>, max_size: usize) -> CacheMap<K, T> {
-
         let read_freq_list = || {
-            let mut file = std::fs::File::open(f_name)?;
-            let mut contents = String::new();
-            file.read_to_string(&mut contents)?;
-            let list: LoopArray<Rc<RefCell<Wrapper<T>>>> = serde_json::from_str(&contents)?;
-            Ok(list)
+            let file = std::fs::File::open(f_name);
+            match file {
+                Ok(mut file) => {
+                    let mut contents = String::new();
+                    file.read_to_string(&mut contents)?;
+                    let list: LoopArray<Rc<RefCell<Wrapper<T>>>> = serde_json::from_str(&contents)?;
+                    Ok(list)
+                }
+                Err(e) => {
+                    print!("{}\n", e);
+                    std::io::stdout().flush().unwrap();
+                    Err(e)
+                }
+            }
         };
         let freq_list: Result<LoopArray<Rc<RefCell<Wrapper<T>>>>, std::io::Error> = read_freq_list();
         match freq_list {
             Ok(mut freq_list) => {
                 let mut map = HashMap::new();
                 for item in &freq_list.v {
-                    map.insert((key_fn)(&item.as_ref().unwrap().borrow().item), item.as_ref().unwrap().clone());
+                    if item.is_some() {
+                        map.insert((key_fn)(&item.as_ref().unwrap().borrow().item), item.as_ref().unwrap().clone());
+                    }
                 }
                 let size = freq_list.v.len();
                 freq_list.v.resize_with(max_size, || None);
@@ -183,14 +197,12 @@ impl<K, T> CacheMap<K, T>
                     size,
                 }
             }
-            _ => {
+            Err(e) => {
+                print!("{}\n", e);
+                std::io::stdout().flush().unwrap();
                 CacheMap::new(key_fn, max_size)
             }
         }
-
-
-
-
     }
 }
 

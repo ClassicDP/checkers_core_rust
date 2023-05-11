@@ -5,13 +5,15 @@ use js_sys::Math::sign;
 use crate::position::{Position, PositionKey};
 use crate::PositionHistory::{FinishType, PositionAndMove, PositionHistory};
 use rand::{Rng};
-use serde_derive::{Deserialize, Serialize};
+use serde::Serialize;
 use crate::{color, log};
 use crate::cache_map::{CacheMap, Wrapper};
 use crate::color::Color;
 use crate::color::Color::{Black, White};
 use crate::moves_list::MoveItem;
 use crate::piece::Piece;
+use serde::Deserialize;
+
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PositionWN {
@@ -77,6 +79,7 @@ impl Node {
     }
 }
 
+
 pub type Cache = Rc<RefCell<CacheMap<PositionKey, Rc<RefCell<PositionWN>>>>>;
 
 #[derive(Debug)]
@@ -100,14 +103,15 @@ impl McTree {
             })),
             history,
             cache:
-                Rc::new(RefCell::new(
-                    CacheMap::new(|pos_wn: &Rc<RefCell<PositionWN>>| pos_wn.borrow().map_key(), 1_000_000))),
+            Rc::new(RefCell::new(
+                CacheMap::new(|pos_wn: &Rc<RefCell<PositionWN>>| pos_wn.borrow().map_key(), 1_000_000))),
         }
     }
 
     pub fn set_cache(&mut self, cache: Cache) {
         self.cache = cache;
     }
+
 
     pub fn new_from_node(root: Rc<RefCell<Node>>, history: Rc<RefCell<PositionHistory>>, cache:
     Rc<RefCell<CacheMap<PositionKey, Rc<RefCell<PositionWN>>>>>) -> McTree {
@@ -168,7 +172,9 @@ impl McTree {
                             history: &Rc<RefCell<PositionHistory>>, hist_len: usize, cache:
                             Rc<RefCell<CacheMap<PositionKey, Rc<RefCell<PositionWN>>>>>) {
             let mut g_len = 0.0;
+            let mut depth = track.len();
             for node in track.iter().rev() {
+                depth -= 1;
                 let passed = node.borrow().childs.iter().all(|x| x.borrow().passed);
                 node.borrow_mut().passed = passed;
                 node.borrow_mut().W += res;
@@ -180,7 +186,7 @@ impl McTree {
                 if {
                     let state = node.borrow().pos_mov.borrow().pos.state.clone();
                     state.black.king + state.black.simple + state.white.king + state.white.simple
-                } > 8 {
+                } > 0 && depth < 3 {
                     let key = node.borrow().pos_mov.borrow().pos.map_key();
                     let ch_node = cache.borrow_mut().get(&key);
                     if ch_node.is_none() || (ch_node.is_some() && ch_node.unwrap().borrow().item.borrow().N < node.borrow().N) {
@@ -316,6 +322,10 @@ impl McTree {
             panic!("no childs")
         }
     }
+
+    // pub fn get_cache_json (&self) -> String {
+    //     // self.cache.serialize().unwrap()
+    // }
 
     pub fn root_map(&self) -> Vec<i64> {
         self.root.borrow().childs.iter().map(|x| x.borrow().N).collect::<Vec<_>>()

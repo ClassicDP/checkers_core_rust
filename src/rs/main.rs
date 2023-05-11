@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::cmp::Ordering;
+use std::collections::HashMap;
 use std::io;
 use std::io::Write;
 use std::ops::Deref;
@@ -67,12 +68,12 @@ pub fn init_test(game: &mut Game) {
 pub fn deep_mcts() {
     let mut game = Game::new(8);
     let mut cache = Rc::new(RefCell::new(CacheMap::from_file(
-        "cache.jsom".to_string(), |pos_wn: &Rc<RefCell<PositionWN>>| pos_wn.borrow().map_key(), 5_000_000)));
+        "cache.json".to_string(), |pos_wn: &Rc<RefCell<PositionWN>>| pos_wn.borrow().map_key(), 500_000)));
     loop {
         init(&mut game);
         game.init_tree();
         if game.tree.is_some() {
-            game.tree.as_mut().unwrap().set_cache(cache.clone());
+            game.tree.as_mut().unwrap().set_cache(cache);
         }
         loop {
             let finish = game.position_history.borrow_mut().finish_check();
@@ -90,7 +91,7 @@ pub fn deep_mcts() {
                 print!("{:?}  {:?}\n", finish, game.position_history.borrow().list.len());
                 break;
             };
-            game.set_mcts_lim(300000);
+            game.set_mcts_lim(200000);
             game.find_mcts_and_make_best_move(true);
             // let cache = game.tree.as_ref().unwrap().cache.clone();
             // cache.borrow_mut().freq_list.v.sort_by_key(|x|
@@ -106,13 +107,34 @@ pub fn deep_mcts() {
             print!("{:?}\n", game.tree.as_ref().unwrap().cache.borrow_mut().freq_list.data_size);
         }
         cache = game.tree.as_ref().unwrap().cache.clone();
+        game.tree = None;
         cache.borrow_mut().write("cache.json".to_string());
-        let list = &mut cache.borrow().freq_list.v.clone();
-        list.sort_by(|x,y| if x.is_some() && y.is_some() {
-            y.as_ref().unwrap().borrow().repetitions.cmp(&x.as_ref().unwrap().borrow().repetitions) } else {
-            if x.is_some() {Ordering::Less} else { Ordering::Greater }
-        });
-        println!("{:?}\n", &list[..10]);
+        // let list = &mut cache.borrow().freq_list.v.clone();
+        // list.sort_by(|x, y| if x.is_some() && y.is_some() {
+        //     y.as_ref().unwrap().borrow().repetitions.cmp(&x.as_ref().unwrap().borrow().repetitions)
+        // } else {
+        //     if x.is_some() { Ordering::Less } else { Ordering::Greater }
+        // });
+        // println!("{:?}\n", &list[..10]);
+        let mut rep_map: HashMap<i32, i32> = HashMap::new();
+        for x in &cache.borrow().freq_list.v {
+            if x.is_some() {
+                let n = rep_map.get(&x.as_ref().unwrap().borrow().repetitions);
+                if n.is_some() {
+                    rep_map.insert(x.as_ref().unwrap().borrow().repetitions, n.unwrap() + 1);
+                } else { rep_map.insert(x.as_ref().unwrap().borrow().repetitions, 1); }
+            }
+
+        }
+        let mut sorted_keys: Vec<_> = rep_map.keys().collect();
+        sorted_keys.sort();
+        let mut list: Vec<(i32,i32)> = vec![];
+        for x in sorted_keys {
+            list.push((*x, *rep_map.get(&x).unwrap()));
+        }
+        println!("{:?}", list);
+        drop(list);
+        drop(rep_map);
     }
 }
 
@@ -205,7 +227,8 @@ pub fn random_game_test() {
                 game.make_move_by_pos_item(best_pos);
             }
         }
-        print!("end: {} {} {:?}\n", game_count, game.position_history.borrow().len(), game.position_history.borrow_mut().finish_check());
+        print!("end: {} {} {:?}\n", game_count, game.position_history.borrow().len(),
+               game.position_history.borrow_mut().finish_check());
         print!("state {}\n", game.state_());
         game_count += 1;
     }
