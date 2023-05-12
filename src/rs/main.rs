@@ -91,7 +91,7 @@ pub fn deep_mcts() {
                 print!("{:?}  {:?}\n", finish, game.position_history.borrow().list.len());
                 break;
             };
-            game.set_mcts_lim(50_000);
+            game.set_mcts_lim(50000);
             game.find_mcts_and_make_best_move(true);
             // let cache = game.tree.as_ref().unwrap().cache.clone();
             // cache.borrow_mut().freq_list.v.sort_by_key(|x|
