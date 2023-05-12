@@ -200,22 +200,15 @@ impl McTree {
             *track = vec![];
         }
         let mut pass = 0;
-        // let u = |child: &Node, node: &Rc<RefCell<Node>>|
-        //     1.4* f64::sqrt(f64::ln(node.borrow().N as f64) / (child.N as f64 + 1.0));
-        let u = |child: &Node, node: &Rc<RefCell<Node>>|
-            f64::sqrt(node.borrow().N as f64) / (child.N as f64 + 1.0);
-        let u_max = |child: &Node, node: &Rc<RefCell<Node>>,
-                     cache_child: &Option<Rc<RefCell<Wrapper<Rc<RefCell<PositionWN>>>>>>| {
-            let (W, N) = if cache_child.is_some() {
-                (cache_child.as_ref().unwrap().borrow().item.borrow().W,
-                 cache_child.as_ref().unwrap().borrow().item.borrow().N)
-            } else {
-                (child.W, child.N)
-            };
-            W as f64 / (N as f64 + 1.0) + u(child, node)
+        let u = |N: i64, node: &Rc<RefCell<Node>>|
+            20.0 * f64::ln(node.borrow().N as f64) / (N as f64 + 1.0);
+        // let u = |N: i64, node: &Rc<RefCell<Node>>|
+        //     10.0 * f64::sqrt(node.borrow().N as f64) / (N as f64 + 1.0);
+        let u_max = |child: &Node, node: &Rc<RefCell<Node>>| {
+            child.W as f64 / (child.N as f64 + 1.0) + u(child.N, node)
         };
         let u_min = |child: &Node, node: &Rc<RefCell<Node>>| {
-            child.W as f64 / (child.N as f64 + 1.0) - u(child, node)
+            child.W as f64 / (child.N as f64 + 1.0) - u(child.N, node)
         };
         let w_n = |a: &Rc<RefCell<Node>>| a.borrow().W as f64 / (1.0 + a.borrow().N as f64);
         while pass < max_passes && self.root.borrow().finish.is_none() {
@@ -250,12 +243,19 @@ impl McTree {
                     if z_ch.len() > 0 {
                         z_ch[rand::thread_rng().gen_range(0..z_ch.len())].clone()
                     } else {
+                        childs.iter().for_each(|x| {
+                            if x.borrow().N == 0 {
+                                let key = x.borrow().pos_mov.borrow().pos.map_key();
+                                let pos_wn = self.cache.borrow_mut().get(&key);
+                                if let Some(pos_wn) = &pos_wn {
+                                    node.borrow_mut().N += pos_wn.borrow().item.borrow().N;
+                                    x.borrow_mut().N = pos_wn.borrow().item.borrow().N;
+                                    x.borrow_mut().W = pos_wn.borrow().item.borrow().W;
+                                }
+                            }
+                        });
                         let node_max = childs.iter().max_by(|a, b| {
-                            let key_a = a.borrow().pos_mov.borrow().pos.map_key();
-                            let key_b = b.borrow().pos_mov.borrow().pos.map_key();
-                            let pos_wn_a = self.cache.borrow_mut().get(&key_a);
-                            let pos_wn_b = self.cache.borrow_mut().get(&key_b);
-                            if u_max(&*a.borrow(), &node, &pos_wn_a) < u_max(&*b.borrow(), &node, &pos_wn_b)
+                            if u_max(&*a.borrow(), &node) < u_max(&*b.borrow(), &node)
                             { Ordering::Less } else { Ordering::Greater }
                         }).unwrap().clone();
                         node_max
