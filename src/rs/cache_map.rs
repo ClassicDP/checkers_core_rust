@@ -157,6 +157,25 @@ impl<K, T> CacheMap<K, T>
     }
 
     pub fn write(&mut self, f_name: String) {
+        fn buck_up(f_name: &String) -> std::io::Result<()> {
+            let file_path = f_name.clone();
+            let backup_file_path = f_name.clone()+".bak";
+
+            // Open the file for reading
+            let mut file = std::fs::File::open(&file_path)?;
+
+            // Read the contents of the file
+            let mut contents = String::new();
+            file.read_to_string(&mut contents)?;
+
+            // Create a backup file and write the contents to it
+            let mut backup_file = std::fs::File::create(&backup_file_path)?;
+            backup_file.write_all(contents.as_bytes())?;
+            Ok(())
+        }
+        if buck_up(&f_name).is_err() {
+            panic!("cant backup cache file");
+        }
         let s = self.get_cache_json();
         let mut f = BufWriter::new(std::fs::File::create(f_name).unwrap());
         f.write(s.as_ref()).unwrap();

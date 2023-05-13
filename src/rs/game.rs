@@ -461,7 +461,7 @@ impl Game {
                 // to boards list
                 let childs =
                     if !apply { node.clone().borrow().childs.clone() } else { self.tree.as_mut().unwrap().tree_childs() };
-                print!("to board list childs :{}\n", childs.len());
+                // print!("to board list childs :{}\n", childs.len());
 
                 let mut n_max =
                     childs.iter().max_by(|x, y|

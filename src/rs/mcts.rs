@@ -197,10 +197,13 @@ impl McTree {
                 };
                 if depth < 3 {
                     let key = node.borrow().pos_mov.borrow().pos.map_key();
-                    let ch_node = cache.lock().unwrap().get(&key);
-                    if ch_node.is_none() || (ch_node.is_some() &&
-                        ch_node.unwrap().lock().unwrap().item.lock().unwrap().N < node.borrow().N) {
-                        cache.lock().unwrap().insert(Arc::new(Mutex::new(PositionWN::fom_node(&node.borrow()))));
+                    if node.borrow().N > 500 {
+                        let ch_node = cache.lock().unwrap().get(&key);
+                        if ch_node.is_none() || (ch_node.is_some() &&
+                            ch_node.unwrap().lock().unwrap().item.lock().unwrap().N < node.borrow().N) {
+                            cache.lock().unwrap()
+                                .insert(Arc::new(Mutex::new(PositionWN::fom_node(&node.borrow()))));
+                        }
                     }
                 }
                 g_len += 1.0;
@@ -262,7 +265,7 @@ impl McTree {
                     childs.iter().for_each(|x| {
                         if x.borrow().N == 0 {
                             let key = x.borrow().pos_mov.borrow().pos.map_key();
-                            let pos_wn = self.cache.lock().unwrap().get(&key);
+                            let pos_wn = self.cache.as_ref().lock().unwrap().get(&key);
                             if let Some(pos_wn) = &pos_wn {
                                 x.borrow_mut().N = pos_wn.lock().unwrap().item.lock().unwrap().N;
                                 x.borrow_mut().W = pos_wn.lock().unwrap().item.lock().unwrap().W;

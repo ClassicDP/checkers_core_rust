@@ -80,19 +80,18 @@ pub fn deep_mcts(cache: Cache) {
         }
         let neuron_start = thread_rng().gen_range(0.0..2.0) > 1.0;
         if neuron_start {
-            game.set_mcts_lim(300000);
+            game.set_mcts_lim(100000);
             game.find_mcts_and_make_best_move(true);
         }
         loop {
             let finish = game.position_history.borrow_mut().finish_check();
             if let Some(finish) = finish {
-
                 print!("mcts start: {:?} {:?}  {:?}\n", neuron_start, finish, game.position_history.borrow().list.len());
                 break;
             }
             game.set_depth(6);
             let best_move = game.get_best_move_rust();
-            print!("{:?}\n", best_move.get_move_item());
+            // print!("{:?}\n", best_move.get_move_item());
             io::stdout().flush().unwrap();
             game.make_best_move(&best_move);
             let finish = game.position_history.borrow_mut().finish_check();
@@ -102,19 +101,26 @@ pub fn deep_mcts(cache: Cache) {
             };
             game.set_mcts_lim(100000);
             game.find_mcts_and_make_best_move(true);
-            // let cache = game.tree.as_ref().unwrap().cache.clone();
-            // cache.borrow_mut().freq_list.v.sort_by_key(|x|
-            //     if let Some(x) = x {
-            //         -x.borrow().repetitions
-            //     } else { 0 }
-            // );
+
             // println!("_");
             // game.set_depth(5);
             // game.set_mcts_lim(300000);
             // game.mix_method(true);
             // print!("{:?}\n", mov.pos_move.unwrap().borrow().mov);
-            print!("{:?}\n", game.tree.as_ref().unwrap().cache.lock().unwrap().freq_list.data_size);
+            // print!("{:?}\n", game.tree.as_ref().unwrap().cache.lock().unwrap().freq_list.data_size);
         }
+        let mut fr_list = game.tree.as_ref().unwrap().cache.lock().unwrap().freq_list.v.clone();
+        fr_list.sort_by_key(|x|
+            if let Some(x) = x {
+                -x.lock().unwrap().repetitions
+            } else { 0 }
+        );
+        println!("trash size: {}", fr_list.iter().filter(|x| {
+            if x.is_some() {
+                x.as_ref().unwrap().lock().unwrap().repetitions < 10
+            } else { false }
+        }).collect::<Vec<_>>().len());
+
         cache = game.tree.as_ref().unwrap().cache.clone();
         game.tree = None;
         cache.lock().unwrap().write("cache.json".to_string());
@@ -133,11 +139,10 @@ pub fn deep_mcts(cache: Cache) {
                     rep_map.insert(x.as_ref().unwrap().lock().unwrap().repetitions, n.unwrap() + 1);
                 } else { rep_map.insert(x.as_ref().unwrap().lock().unwrap().repetitions, 1); }
             }
-
         }
         let mut sorted_keys: Vec<_> = rep_map.keys().collect();
         sorted_keys.sort();
-        let mut list: Vec<(i32,i32)> = vec![];
+        let mut list: Vec<(i32, i32)> = vec![];
         for x in sorted_keys {
             list.push((*x, *rep_map.get(&x).unwrap()));
         }
@@ -247,7 +252,7 @@ pub fn random_game_test() {
 pub fn main() {
     let cache = Arc::new(Mutex::new(CacheMap::from_file(
         "cache.json".to_string(), |pos_wn: &Arc<Mutex<PositionWN>>| pos_wn.lock().unwrap().map_key(), 500_000)));
-    Arc::new(vec![0,1]).par_iter().for_each(|_|deep_mcts(cache.clone()));
+    Arc::new(vec![0;8]).par_iter().for_each(|_| deep_mcts(cache.clone()));
 
 
     mcts();
