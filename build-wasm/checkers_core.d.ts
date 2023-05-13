@@ -108,6 +108,12 @@ export class Game {
 */
   find_mcts_and_make_best_move_ts_n(apply: boolean): any;
 /**
+*/
+  init_tree(): void;
+/**
+*/
+  resort_cache(): void;
+/**
 * @returns {MCTSRes | undefined}
 */
   check_tree_for_finish(): MCTSRes | undefined;
@@ -283,6 +289,8 @@ export interface InitOutput {
   readonly game_make_best_move: (a: number, b: number) => void;
   readonly game_find_and_make_best_move_ts_n: (a: number) => number;
   readonly game_find_mcts_and_make_best_move_ts_n: (a: number, b: number) => number;
+  readonly game_init_tree: (a: number) => void;
+  readonly game_resort_cache: (a: number) => void;
   readonly game_check_tree_for_finish: (a: number) => number;
   readonly game_preparing_tree: (a: number) => void;
   readonly game_find_mcts_and_make_best_move: (a: number, b: number) => number;
@@ -311,7 +319,6 @@ export interface InitOutput {
   readonly positionenvironment_is_king_move_for: (a: number, b: number, c: number) => number;
   readonly positionenvironment_game: () => void;
   readonly positionenvironment_test: () => number;
-  readonly __wbg_positionandmove_free: (a: number) => void;
   readonly piece_new: (a: number, b: number, c: number) => number;
   readonly piece_new_fom_js: (a: number) => number;
   readonly piece_it: (a: number) => number;
@@ -325,6 +332,7 @@ export interface InitOutput {
   readonly __wbg_set_piece_is_king: (a: number, b: number) => void;
   readonly __wbg_get_piece_stricken: (a: number) => number;
   readonly __wbg_set_piece_stricken: (a: number, b: number) => void;
+  readonly __wbg_positionandmove_free: (a: number) => void;
   readonly __wbindgen_malloc: (a: number) => number;
   readonly __wbindgen_realloc: (a: number, b: number, c: number) => number;
   readonly __wbindgen_add_to_stack_pointer: (a: number) => number;

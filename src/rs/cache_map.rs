@@ -4,6 +4,7 @@ use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
 use std::io::{BufWriter, Read, Write};
 use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 use serde::{Deserialize, Serialize};
 use serde_json::to_writer;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -62,9 +63,9 @@ pub struct CacheMap<K, T>
         K: Hash + Eq + Serialize + 'static
 
 {
-    pub freq_list: LoopArray<Rc<RefCell<Wrapper<T>>>>,
+    pub freq_list: LoopArray<Arc<Mutex<Wrapper<T>>>>,
     #[serde(skip_serializing)]
-    map: HashMap<K, Rc<RefCell<Wrapper<T>>>>,
+    map: HashMap<K, Arc<Mutex<Wrapper<T>>>>,
     size: usize,
     max_size: usize,
     #[serde(skip)]
@@ -89,7 +90,7 @@ impl<K, T> CacheMap<K, T>
         K: Hash + Eq + Serialize
 {
     pub fn new(key_fn: KeyFn<T, K>, max_size: usize) -> CacheMap<K, T> {
-        let mut v: LoopArray<Rc<RefCell<Wrapper<T>>>> = LoopArray::new(max_size);
+        let mut v: LoopArray<Arc<Mutex<Wrapper<T>>>> = LoopArray::new(max_size);
         v.v.resize_with(max_size, || None);
         CacheMap {
             map: HashMap::new(),
@@ -104,25 +105,25 @@ impl<K, T> CacheMap<K, T>
         let key = &self.key(&x);
         let v = self.map.get(key);
         if let Some(v) = v {
-            v.borrow_mut().repeat();
-            v.borrow_mut().item = x;
-            let i = v.borrow_mut().get_array_pointer();
+            v.lock().unwrap().repeat();
+            v.lock().unwrap().item = x;
+            let i = v.lock().unwrap().get_array_pointer();
             let i_next = self.freq_list.next_loop_p(i);
             if i_next.is_some() {
                 let i_next = i_next.unwrap();
                 self.freq_list.swap(i, i_next);
-                self.freq_list.v[i].as_ref().unwrap().borrow_mut().array_pointer = i;
-                self.freq_list.v[i_next].as_ref().unwrap().borrow_mut().array_pointer = i_next;
+                self.freq_list.v[i].as_ref().unwrap().lock().unwrap().array_pointer = i;
+                self.freq_list.v[i_next].as_ref().unwrap().lock().unwrap().array_pointer = i_next;
             }
         } else {
-            let wrap = Rc::from(RefCell::from(Wrapper::new(x)));
+            let wrap = Arc::from(Mutex::from(Wrapper::new(x)));
             let (old, pointer) = self.freq_list.push(wrap.clone());
             if old.is_some() {
-                let key = self.key(&old.as_ref().unwrap().as_ref().borrow().item);
+                let key = self.key(&old.as_ref().unwrap().as_ref().lock().unwrap().item);
                 self.map.remove(&key);
             }
-            wrap.borrow_mut().set_list_pointer(pointer);
-            let key = self.key(&wrap.borrow().item);
+            wrap.lock().unwrap().set_list_pointer(pointer);
+            let key = self.key(&wrap.lock().unwrap().item);
             self.map.insert(key, wrap.clone());
         }
     }
@@ -131,18 +132,19 @@ impl<K, T> CacheMap<K, T>
         (self.key_fn.unwrap())(item)
     }
 
-    pub fn get(&mut self, key: &K) -> Option<Rc<RefCell<Wrapper<T>>>> {
+    pub fn get(&mut self, key: &K) -> Option<Arc<Mutex<Wrapper<T>>>> {
         let x = self.map.get(key);
         if x.is_some() { Some(x.unwrap().clone()) } else { None }
     }
 
     pub fn resort<SK: Ord>(&mut self, sort_fn: fn(item: Option<T>) -> SK) {
-        self.freq_list.v.sort_by_key(|x| (sort_fn)(Some(x.as_ref().unwrap().borrow().item.clone())));
+        self.freq_list.v.sort_by_key(|x| (sort_fn)(Some(
+            x.as_ref().unwrap().lock().unwrap().item.clone())));
         let list = self.freq_list.v.clone();
         let mut cache_map = CacheMap::new(self.key_fn.unwrap(), self.max_size);
         self.map = HashMap::new();
         for x in list {
-            if x.is_some() { cache_map.insert(x.unwrap().borrow().item.clone()); }
+            if x.is_some() { cache_map.insert(x.unwrap().lock().unwrap().item.clone()); }
         }
         self.freq_list = cache_map.freq_list;
         self.map = cache_map.map;
@@ -168,7 +170,7 @@ impl<K, T> CacheMap<K, T>
                 Ok(mut file) => {
                     let mut contents = String::new();
                     file.read_to_string(&mut contents)?;
-                    let list: LoopArray<Rc<RefCell<Wrapper<T>>>> = serde_json::from_str(&contents)?;
+                    let list: LoopArray<Arc<Mutex<Wrapper<T>>>> = serde_json::from_str(&contents)?;
                     Ok(list)
                 }
                 Err(e) => {
@@ -178,13 +180,13 @@ impl<K, T> CacheMap<K, T>
                 }
             }
         };
-        let freq_list: Result<LoopArray<Rc<RefCell<Wrapper<T>>>>, std::io::Error> = read_freq_list();
+        let freq_list: Result<LoopArray<Arc<Mutex<Wrapper<T>>>>, std::io::Error> = read_freq_list();
         match freq_list {
             Ok(mut freq_list) => {
                 let mut map = HashMap::new();
                 for item in &freq_list.v {
                     if item.is_some() {
-                        map.insert((key_fn)(&item.as_ref().unwrap().borrow().item), item.as_ref().unwrap().clone());
+                        map.insert((key_fn)(&item.as_ref().unwrap().lock().unwrap().item), item.as_ref().unwrap().clone());
                     }
                 }
                 let size = freq_list.v.len();
@@ -261,12 +263,12 @@ mod tests {
         cache_map.insert(a3.clone());
         cache_map.insert(a2.clone());
         print!("{:?}\n", cache_map.freq_list.get_list());
-        assert_eq!(cache_map.freq_list.at(2).as_ref().unwrap().as_ref().borrow_mut().item, a2);
+        assert_eq!(cache_map.freq_list.at(2).as_ref().unwrap().as_ref().lock().unwrap().item, a2);
         cache_map.insert(a1.clone());
-        assert_eq!(cache_map.freq_list.at(1).as_ref().unwrap().as_ref().borrow_mut().item, a1);
+        assert_eq!(cache_map.freq_list.at(1).as_ref().unwrap().as_ref().lock().unwrap().item, a1);
         print!("{:?}\n", cache_map.freq_list.get_list());
         cache_map.insert(a2.clone());
-        assert_eq!(cache_map.freq_list.at(2).as_ref().unwrap().as_ref().borrow_mut().item, a2);
+        assert_eq!(cache_map.freq_list.at(2).as_ref().unwrap().as_ref().lock().unwrap().item, a2);
         print!("{:?}\n", cache_map.freq_list.get_list());
         cache_map.write("cache.json".to_string());
         let mut new_cache = CacheMap::from_file("cache.json".to_string(), |x: &Vec<i32>| x.clone(), 3);
@@ -277,7 +279,7 @@ mod tests {
         print!("{:?}\n", new_cache.freq_list.get_list());
         new_cache.insert(a4.clone());
         print!("{:?}\n", new_cache.freq_list.get_list());
-        assert_eq!(new_cache.freq_list.at(0).as_ref().unwrap().borrow_mut().item, a1);
-        assert_eq!(new_cache.freq_list.at(2).as_ref().unwrap().borrow_mut().item, a4);
+        assert_eq!(new_cache.freq_list.at(0).as_ref().unwrap().lock().unwrap().item, a1);
+        assert_eq!(new_cache.freq_list.at(2).as_ref().unwrap().lock().unwrap().item, a4);
     }
 }

@@ -1,5 +1,6 @@
 use std::cell::{RefCell};
 use std::rc::Rc;
+use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 use crate::color::Color;
 use crate::moves::BoardPos;
@@ -55,7 +56,7 @@ pub enum Method {
 pub struct Game {
     #[wasm_bindgen(skip)]
     pub position_history: Rc<RefCell<PositionHistory>>,
-    position_environment: Rc<PositionEnvironment>,
+    position_environment: Arc<PositionEnvironment>,
     #[wasm_bindgen(skip)]
     pub current_position: Position,
     max_depth: i16,
@@ -69,7 +70,7 @@ pub struct Game {
 impl Game {
     #[wasm_bindgen(constructor)]
     pub fn new(size: i8) -> Self {
-        let environment = Rc::new(PositionEnvironment::new(size));
+        let environment = Arc::new(PositionEnvironment::new(size));
         let position = Position::new(environment.clone());
         let position_history = Rc::new(RefCell::new(PositionHistory::new()));
         Game {
@@ -382,7 +383,7 @@ impl Game {
 
     pub fn resort_cache(&mut self) {
         let cache = self.tree.as_ref().unwrap().cache.clone();
-        cache.borrow_mut().resort(|x|if x.is_some() {-x.unwrap().borrow().N} else { i64::MAX });
+        cache.lock().unwrap().resort(|x|if x.is_some() {-x.unwrap().lock().unwrap().N} else { i64::MAX });
     }
 
     pub fn check_tree_for_finish(&mut self) -> Option<MCTSRes> {
@@ -426,10 +427,7 @@ impl Game {
 
     #[wasm_bindgen]
     pub fn find_mcts_and_make_best_move(&mut self, apply: bool) -> MCTSRes {
-        let finish = self.check_tree_for_finish();
-        if finish.is_some() {
-            return finish.unwrap();
-        }
+
         self.preparing_tree();
         // let finish = self.check_tree_for_finish();
         // if finish.is_some() {
@@ -444,14 +442,19 @@ impl Game {
         //     // Search in tree
         //     self.tree.as_mut().unwrap().search(self.mcts_lim)
         // };
+        let finish = self.check_tree_for_finish();
+        if finish.is_some() {
+            return finish.unwrap()
+        }
         let node = self.tree.as_mut().unwrap().search(self.mcts_lim);
         if apply {
             self.apply_node_move(node.clone());
         }
         let finish = self.check_tree_for_finish();
         if finish.is_some() {
-            return finish.unwrap();
+            return finish.unwrap()
         }
+        self.preparing_tree();
 
         let board_list =
             if apply {

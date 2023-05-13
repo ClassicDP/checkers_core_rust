@@ -1,11 +1,12 @@
 use serde::{Deserialize, Serialize};
 use std::rc::Rc;
+use std::sync::Arc;
 use ts_rs::TS;
 
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct Vector<T> {
-    pub(crate) points: Rc<Vec<T>>,
+    pub(crate) points: Arc<Vec<T>>,
     pub(crate) direction: i8,
     // 0..3 (0 - UR, 1 - UL, 2 - DL, 3 - DR): used in Game
     range_a: Option<usize>,
@@ -21,7 +22,7 @@ pub struct VectorIntoIterator<'a, T> {
 impl<T> Vector<T> {
     pub fn new(direction: i8, points: Vec<T>) -> Vector<T> {
         Vector {
-            points: Rc::new(points),
+            points: Arc::new(points),
             direction,
             range_a: None,
             range_b: None,

@@ -5,6 +5,7 @@ use js_sys::Math::sign;
 use crate::position::{Position, PositionKey};
 use crate::PositionHistory::{FinishType, PositionAndMove, PositionHistory};
 use rand::{Rng};
+use rayon::prelude::IntoParallelRefIterator;
 use serde::Serialize;
 use crate::{color, log};
 use crate::cache_map::{CacheMap, Wrapper};
@@ -13,6 +14,9 @@ use crate::color::Color::{Black, White};
 use crate::moves_list::MoveItem;
 use crate::piece::Piece;
 use serde::Deserialize;
+use rayon::prelude::*;
+use std::iter::Iterator;
+use std::sync::{Arc, Mutex};
 
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -65,6 +69,14 @@ impl Node {
         if self.childs.len() > 0 { return; }
         let mut base_p = self.pos_mov.borrow().pos.clone();
         let move_list = base_p.get_move_list_cached();
+        // let childs = Arc::new(Mutex::new(vec![]));
+        // move_list.as_ref().as_ref().unwrap().list.par_iter().for_each(|x| {
+        //     childs.lock().unwrap().push(base_p.clone().make_move_and_get_position(x))
+        // });
+        // let childs = childs.lock().unwrap().clone();
+        // for x in childs {
+        //     self.childs.push(Rc::new(RefCell::new(Node::new(x))))
+        // }
         for mov in &move_list.as_ref().as_ref().unwrap().list {
             self.childs.push(Rc::new(
                 RefCell::new(Node::new(base_p.make_move_and_get_position(mov)))));
@@ -80,7 +92,7 @@ impl Node {
 }
 
 
-pub type Cache = Rc<RefCell<CacheMap<PositionKey, Rc<RefCell<PositionWN>>>>>;
+pub type Cache = Arc<Mutex<CacheMap<PositionKey, Arc<Mutex<PositionWN>>>>>;
 
 #[derive(Debug)]
 pub struct McTree {
@@ -103,8 +115,8 @@ impl McTree {
             })),
             history,
             cache:
-            Rc::new(RefCell::new(
-                CacheMap::new(|pos_wn: &Rc<RefCell<PositionWN>>| pos_wn.borrow().map_key(), 1_000_000))),
+            Arc::new(Mutex::new(
+                CacheMap::new(|pos_wn: &Arc<Mutex<PositionWN>>| pos_wn.lock().unwrap().map_key(), 1_000_000))),
         }
     }
 
@@ -114,7 +126,7 @@ impl McTree {
 
 
     pub fn new_from_node(root: Rc<RefCell<Node>>, history: Rc<RefCell<PositionHistory>>, cache:
-    Rc<RefCell<CacheMap<PositionKey, Rc<RefCell<PositionWN>>>>>) -> McTree {
+    Arc<Mutex<CacheMap<PositionKey, Arc<Mutex<PositionWN>>>>>) -> McTree {
         McTree {
             root,
             history,
@@ -170,7 +182,7 @@ impl McTree {
         let hist_len = self.history.borrow().len();
         fn back_propagation(mut res: i64, track: &mut Vec<Rc<RefCell<Node>>>,
                             history: &Rc<RefCell<PositionHistory>>, hist_len: usize, cache:
-                            Rc<RefCell<CacheMap<PositionKey, Rc<RefCell<PositionWN>>>>>) {
+                            Arc<Mutex<CacheMap<PositionKey, Arc<Mutex<PositionWN>>>>>) {
             let mut g_len = 0.0;
             let mut depth = track.len();
             for node in track.iter().rev() {
@@ -183,14 +195,12 @@ impl McTree {
                     let n = node.borrow().N;
                     (avr * n as f64 + g_len) / (n as f64 + 1.0)
                 };
-                if {
-                    let state = node.borrow().pos_mov.borrow().pos.state.clone();
-                    state.black.king + state.black.simple + state.white.king + state.white.simple
-                } > 0 && depth < 3 {
+                if depth < 3 {
                     let key = node.borrow().pos_mov.borrow().pos.map_key();
-                    let ch_node = cache.borrow_mut().get(&key);
-                    if ch_node.is_none() || (ch_node.is_some() && ch_node.unwrap().borrow().item.borrow().N < node.borrow().N) {
-                        cache.borrow_mut().insert(Rc::new(RefCell::new(PositionWN::fom_node(&node.borrow()))));
+                    let ch_node = cache.lock().unwrap().get(&key);
+                    if ch_node.is_none() || (ch_node.is_some() &&
+                        ch_node.unwrap().lock().unwrap().item.lock().unwrap().N < node.borrow().N) {
+                        cache.lock().unwrap().insert(Arc::new(Mutex::new(PositionWN::fom_node(&node.borrow()))));
                     }
                 }
                 g_len += 1.0;
@@ -201,13 +211,23 @@ impl McTree {
         }
         let mut pass = 0;
         let u = |N: i64, node: &Rc<RefCell<Node>>|
-            20.0 * f64::ln(node.borrow().N as f64) / (N as f64 + 1.0);
-        // let u = |N: i64, node: &Rc<RefCell<Node>>|
-        //     10.0 * f64::sqrt(node.borrow().N as f64) / (N as f64 + 1.0);
+            {
+                let n = node.borrow().childs.iter()
+                    .fold(0, |acc, x| acc + x.borrow().N) as f64;
+                1.4 * f64::sqrt(f64::ln(n) / (N as f64 + 1.0))
+
+                // 2.0 * f64::sqrt(
+                //     // node.borrow().childs.iter().fold(0, |acc, x|acc+x.borrow().N) as f64
+                //     node.borrow().N as f64
+                // ) / (N as f64 + 1.0);
+                // let u = |N: i64, node: &Rc<RefCell<Node>>|
+                //     10.0 * f64::sqrt(node.borrow().N as f64) / (N as f64 + 1.0);
+            };
         let u_max = |child: &Node, node: &Rc<RefCell<Node>>| {
             child.W as f64 / (child.N as f64 + 1.0) + u(child.N, node)
         };
         let u_min = |child: &Node, node: &Rc<RefCell<Node>>| {
+            // child.N as f64
             child.W as f64 / (child.N as f64 + 1.0) - u(child.N, node)
         };
         let w_n = |a: &Rc<RefCell<Node>>| a.borrow().W as f64 / (1.0 + a.borrow().N as f64);
@@ -239,21 +259,20 @@ impl McTree {
                 // }).collect::<Vec<_>>();
                 pass += 1;
                 node = {
+                    childs.iter().for_each(|x| {
+                        if x.borrow().N == 0 {
+                            let key = x.borrow().pos_mov.borrow().pos.map_key();
+                            let pos_wn = self.cache.lock().unwrap().get(&key);
+                            if let Some(pos_wn) = &pos_wn {
+                                x.borrow_mut().N = pos_wn.lock().unwrap().item.lock().unwrap().N;
+                                x.borrow_mut().W = pos_wn.lock().unwrap().item.lock().unwrap().W;
+                            }
+                        }
+                    });
                     let z_ch: Vec<_> = childs.iter().filter(|x| x.borrow().N == 0).collect();
                     if z_ch.len() > 0 {
                         z_ch[rand::thread_rng().gen_range(0..z_ch.len())].clone()
                     } else {
-                        childs.iter().for_each(|x| {
-                            if x.borrow().N == 0 {
-                                let key = x.borrow().pos_mov.borrow().pos.map_key();
-                                let pos_wn = self.cache.borrow_mut().get(&key);
-                                if let Some(pos_wn) = &pos_wn {
-                                    node.borrow_mut().N += pos_wn.borrow().item.borrow().N;
-                                    x.borrow_mut().N = pos_wn.borrow().item.borrow().N;
-                                    x.borrow_mut().W = pos_wn.borrow().item.borrow().W;
-                                }
-                            }
-                        });
                         let node_max = childs.iter().max_by(|a, b| {
                             if u_max(&*a.borrow(), &node) < u_max(&*b.borrow(), &node)
                             { Ordering::Less } else { Ordering::Greater }
@@ -285,6 +304,7 @@ impl McTree {
                         // node.borrow().childs.last().unwrap().clone()
                     }
                 };
+
                 let hist_finish = self.history.borrow_mut().push_rc(node.borrow().pos_mov.clone());
                 track.push(node.clone());
                 // if finish achieved

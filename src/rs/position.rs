@@ -1,16 +1,20 @@
+use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
 use std::io;
 use std::io::Write;
 use std::mem::swap;
+use std::ops::Deref;
 use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 use rand::{Rng, thread_rng};
+use rayon::prelude::*;
 
 use serde::{Deserialize, Serialize};
 use crate::position_environment::PositionEnvironment;
 use crate::vector::Vector;
 use crate::moves::{BoardPos, PieceMove, QuietMove, StraightStrike};
-use crate::moves_list::{MoveItem, MoveList};
+use crate::moves_list::{MoveItem, MoveList, Strike};
 use crate::color::Color;
 use crate::piece::Piece;
 use ts_rs::*;
@@ -88,11 +92,11 @@ pub struct Position {
     pub cells: Vec<Option<Piece>>,
     pub state: PosState,
     pub next_move: Option<Color>,
-    move_list: Rc<Option<MoveList>>,
+    move_list: Arc<Option<MoveList>>,
     #[serde(skip_serializing)]
     pub eval: Option<i32>,
     #[serde(skip_serializing)]
-    pub environment: Rc<PositionEnvironment>,
+    pub environment: Arc<PositionEnvironment>,
     #[serde(skip_serializing)]
     pub took_pieces: Vec<Option<Piece>>,
 }
@@ -108,7 +112,7 @@ impl PartialEq for Position {
 }
 
 impl Position {
-    pub fn new(environment: Rc<PositionEnvironment>) -> Position {
+    pub fn new(environment: Arc<PositionEnvironment>) -> Position {
         let mut pos = Position {
             state: PosState {
                 black: { PieceCount { king: 0, simple: 0 } },
@@ -123,7 +127,7 @@ impl Position {
             cells: Vec::new(),
             environment,
             next_move: None,
-            move_list: Rc::new(None),
+            move_list: Arc::new(None),
             eval: None,
             took_pieces: vec![],
         };
@@ -144,10 +148,10 @@ impl Position {
         io::stdout().flush().unwrap();
     }
 
-    pub fn get_move_list_cached(&mut self) -> Rc<Option<MoveList>> {
+    pub fn get_move_list_cached(&mut self) -> Arc<Option<MoveList>> {
         if self.move_list.is_none() {
             let move_li = self.get_move_list(false);
-            self.move_list = Rc::new(Option::from(move_li));
+            self.move_list = Arc::new(Option::from(move_li));
         }
         self.move_list.clone()
     }
@@ -169,7 +173,7 @@ impl Position {
         let pos = piece.pos as usize;
         self.state_change(&piece, 1);
         self.cells[pos] = Some(piece);
-        self.move_list = Rc::new(None);
+        self.move_list = Arc::new(None);
         self.eval = None;
     }
 
@@ -177,7 +181,7 @@ impl Position {
         if let Some(piece) = self.cells[pos].clone() {
             self.state_change(&piece, -1);
             self.cells[pos] = None;
-            self.move_list = Rc::new(None);
+            self.move_list = Arc::new(None);
             self.eval = None;
             return true;
         }
@@ -219,7 +223,7 @@ impl Position {
         }
     }
 
-    fn get_piece_by_v(&self, v: &Rc<Vec<BoardPos>>, i: usize) -> &Option<Piece> {
+    fn get_piece_by_v(&self, v: &Arc<Vec<BoardPos>>, i: usize) -> &Option<Piece> {
         &self.cells[v[i]]
     }
     pub fn swap(&mut self, i: BoardPos, j: BoardPos) {
@@ -233,7 +237,7 @@ impl Position {
         set_pos(&mut self.cells[j], j);
     }
 
-    fn straight_strike(&mut self, v: &Rc<Vec<BoardPos>>) -> Option<StraightStrike> {
+    fn straight_strike(&mut self, v: &Arc<Vec<BoardPos>>) -> Option<StraightStrike> {
         if v.len() < 3 {
             return None;
         }
@@ -268,7 +272,7 @@ impl Position {
         None
     }
 
-    fn get_vectors(&self, piece: &Piece, ban_directions: &Vec<i8>, for_strike: bool) -> Vec<Rc<Vector<BoardPos>>> {
+    fn get_vectors(&self, piece: &Piece, ban_directions: &Vec<i8>, for_strike: bool) -> Vec<Arc<Vector<BoardPos>>> {
         let d2_4 = {
             if piece.is_king || for_strike { vec![0, 1, 2, 3] } else if piece.color == Color::White {
                 vec![0, 1]
@@ -295,7 +299,7 @@ impl Position {
     pub fn get_quiet_move_list(
         &mut self,
         pos: BoardPos,
-        move_list: &mut MoveList,
+        move_list:  &Arc<Mutex<MoveList>>,
     ) -> bool {
         if let Some(piece) = &self.cells[pos] {
             let vectors: Vec<_> = self.get_vectors(piece, &vec![], false);
@@ -304,7 +308,7 @@ impl Position {
                     if piece.is_king { &(vector.points)[1..] } else { &(vector.points)[1..2] }
                 } {
                     if self.cells[*point].is_some() { break; }
-                    move_list.list.push(
+                    move_list.lock().unwrap().list.push(
                         MoveItem {
                             mov: Some(QuietMove {
                                 from: pos,
@@ -315,7 +319,7 @@ impl Position {
                         })
                 }
             }
-            return move_list.list.len() > 0;
+            return move_list.lock().unwrap().list.len() > 0;
         }
         false
     }
@@ -334,7 +338,7 @@ impl Position {
             for cell in &self.cells {
                 if let Some(ref piece) = cell {
                     let v = self.get_vectors(piece, &vec![], false);
-                    let empir = rand::thread_rng().gen_range(9..10);
+                    let empir = rand::thread_rng().gen_range(6..10);
                     let s = if piece.color == Color::White { empir } else { -empir };
                     if !piece.is_king {
                         // let row = (piece.pos * 2 / self.environment.size as usize) as i32;
@@ -368,9 +372,10 @@ impl Position {
     pub fn get_strike_list(
         &mut self,
         pos: BoardPos,
-        move_list: &mut MoveList,
+        move_list: &Arc<Mutex<MoveList>>,
         ban_directions: &Vec<i8>,
         for_front: bool,
+        current_chain: &mut Strike
     ) -> bool {
         let mut success_call = false;
         if let Some(piece) = &self.cells[pos] {
@@ -386,13 +391,13 @@ impl Position {
                     for pos in &straight_strike {
                         strike_move.to = pos;
                         self.make_strike_or_move(&mut strike_move);
-                        move_list.current_chain.vec.push(strike_move.clone());
-                        if strike_move.king_move { move_list.current_chain.king_move = true; }
-                        if self.get_strike_list(pos, move_list, &ban_directions, for_front) {
+                        current_chain.vec.push(strike_move.clone());
+                        if strike_move.king_move { current_chain.king_move = true; }
+                        if self.get_strike_list(pos, move_list, &ban_directions, for_front, current_chain) {
                             recurrent_chain = true;
                         }
-                        move_list.current_chain.vec.pop();
-                        if strike_move.king_move { move_list.current_chain.king_move = false; }
+                        current_chain.vec.pop();
+                        if strike_move.king_move { current_chain.king_move = false; }
                         self.unmake_strike_or_move(&strike_move);
                         if !for_front && ban_directions.len() < 2 {
                             ban_directions.push(v.direction);
@@ -402,10 +407,10 @@ impl Position {
                         for pos in &straight_strike {
                             let mut strike_move = straight_strike.clone();
                             strike_move.to = pos;
-                            let mut chain = move_list.current_chain.clone();
+                            let mut chain = current_chain.clone();
                             if strike_move.king_move { chain.king_move = true; }
                             chain.vec.push(strike_move);
-                            move_list.list.push(MoveItem { strike: Some(chain), mov: None });
+                            move_list.lock().unwrap().list.push(MoveItem { strike: Some(chain), mov: None });
                         }
                     }
                 }
@@ -432,7 +437,7 @@ impl Position {
             self.make_strike_or_move(mov);
         }
         if self.next_move.is_some() { self.next_move = Some(!self.next_move.unwrap()) }
-        self.move_list = Rc::new(None);
+        self.move_list = Arc::new(None);
         self.eval = None;
     }
 
@@ -467,16 +472,26 @@ impl Position {
             .map(|piece| if let Some(piece) =
                 piece { piece.pos } else { panic!("Position problem in get_move_list"); })
             .collect();
-        let mut move_list = MoveList::new();
+        let move_list = Arc::new(Mutex::new(MoveList::new()));
+        // let posit_list = Arc::new(Mutex::new(
+        //     pieces_pos.iter().map(|_|self.clone()).collect::<Vec<_>>()));
+        // pieces_pos.par_iter().enumerate().for_each(|(i,x)|{
+        //     posit_list.lock().unwrap()[i].get_strike_list(*x, &move_list, &vec![], for_front,
+        //                                  &mut Strike::new());
+        // });
         for pos in &pieces_pos {
-            self.get_strike_list(*pos, &mut move_list, &vec![], for_front);
+            self.get_strike_list(*pos, &move_list, &vec![], for_front, &mut Strike::new());
         }
-        if move_list.list.is_empty() {
+        if move_list.lock().unwrap().list.is_empty() {
+            // pieces_pos.par_iter().enumerate().for_each(|(i,x)|{
+            //     posit_list.lock().unwrap()[i].get_quiet_move_list(*x, &move_list);
+            // });
             for pos in pieces_pos {
-                self.get_quiet_move_list(pos, &mut move_list);
+                self.get_quiet_move_list(pos, &move_list);
             }
         }
-        move_list
+        let ret = move_list.lock().unwrap();
+        ret.clone()
     }
 
     pub fn map_key(&self) -> (Vec<Option<Piece>>, Option<Color>) {

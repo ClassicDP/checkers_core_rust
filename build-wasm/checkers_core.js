@@ -392,6 +392,16 @@ export class Game {
         return takeObject(ret);
     }
     /**
+    */
+    init_tree() {
+        wasm.game_init_tree(this.ptr);
+    }
+    /**
+    */
+    resort_cache() {
+        wasm.game_resort_cache(this.ptr);
+    }
+    /**
     * @returns {MCTSRes | undefined}
     */
     check_tree_for_finish() {

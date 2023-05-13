@@ -27,6 +27,15 @@ pub struct MoveItem {
     pub mov: Option<QuietMove>,
 }
 
+impl Strike {
+    pub fn new() -> Strike {
+        Strike {
+            king_move: false,
+            vec: vec![]
+        }
+    }
+}
+
 impl MoveItem {
     pub fn get_chain_piece_move(&self) -> &dyn ChainPieceMove {
         match &self.strike {
@@ -46,7 +55,6 @@ impl MoveItem {
     pub fn to(&self) -> BoardPos {
         self.get_chain_piece_move().to()
     }
-
 
     pub fn is_king_move(&self) -> bool {
         self.get_chain_piece_move().is_king_move()
@@ -99,8 +107,8 @@ impl<'a> IntoIterator for &'a MoveItem {
 pub struct MoveList {
     #[wasm_bindgen(skip)]
     pub list: Vec<MoveItem>,
-    #[wasm_bindgen(skip)]
-    pub current_chain: Strike,
+    // #[wasm_bindgen(skip)]
+    // pub current_chain: Strike,
 }
 
 
@@ -108,7 +116,7 @@ impl MoveList {
     pub fn new() -> MoveList {
         MoveList {
             list: Vec::new(),
-            current_chain: Strike { vec: Vec::new(), king_move: false },
+            // current_chain: Strike { vec: Vec::new(), king_move: false },
         }
     }
 }

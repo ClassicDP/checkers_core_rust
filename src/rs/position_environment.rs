@@ -5,9 +5,10 @@ use crate::color::Color;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::JsValue;
-use crate::moves_list::MoveList;
+use crate::moves_list::{MoveList, Strike};
 use crate::piece::Piece;
 use ts_rs::TS;
 use crate::game::Game;
@@ -38,7 +39,7 @@ pub struct PositionEnvironment {
     pub size: i8,
     king_row_black: usize,
     king_row_white: usize,
-    vectors_map: Vec<Vec<Rc<Vector<BoardPos>>>>,
+    vectors_map: Vec<Vec<Arc<Vector<BoardPos>>>>,
     pub(crate) board_to_pack: Vec<BoardPos>,
     pub(crate) pack_to_board: Vec<BoardPos>,
     pub(crate) cell_grade: Vec<Grade>,
@@ -89,7 +90,7 @@ impl PositionEnvironment {
                         Vector::new(direction_index, points);
 
                     if v.points.len() > 1 {
-                        d4_v_list.push(Rc::new(v));
+                        d4_v_list.push(Arc::new(v));
                     }
                     direction_index += 1;
                 }
@@ -175,7 +176,7 @@ impl PositionEnvironment {
     #[wasm_bindgen]
     pub fn test() -> JsValue {
         let game = PositionEnvironment::new(8);
-        let mut pos = Position::new(Rc::new(game));
+        let mut pos = Position::new(Arc::new(game));
         pos.insert_piece(Piece::new(22, Color::White, false));
         pos.insert_piece(Piece::new(4, Color::Black, true));
         pos.insert_piece(Piece::new(21, Color::Black, true));
@@ -207,17 +208,17 @@ impl PositionEnvironment {
         //
 
         for _i in 0..100000 {
-            let mut list = MoveList::new();
-            pos.get_strike_list(22, &mut list, &vec![], false);
-            let mut p0 = pos.make_move_and_get_position(&mut list.list[0]);
+            let mut list = Arc::new(Mutex::new(MoveList::new()));
+            pos.get_strike_list(22, &list, &vec![], false, &mut Strike::new());
+            let p0 = pos.make_move_and_get_position(&mut list.lock().unwrap().clone().list[0]);
             pos.unmake_move(&p0.mov.unwrap());
             let p1 = p0.pos.clone();
             if p0.pos != p1 { break; }
         };
 
 
-        let mut list = MoveList::new();
-        pos.get_strike_list(22, &mut list, &vec![], false);
+        let list = Arc::new(Mutex::new(MoveList::new()));
+        pos.get_strike_list(22, &list, &vec![], false, &mut Strike::new());
         match serde_wasm_bindgen::to_value(&list) {
             Ok(js) => js,
             Err(_err) => JsValue::UNDEFINED,
@@ -232,7 +233,7 @@ impl PositionEnvironment {
 }
 
 impl PositionEnvironment {
-    pub fn get_vectors(&self, pos: usize) -> &Vec<Rc<Vector<BoardPos>>> {
+    pub fn get_vectors(&self, pos: usize) -> &Vec<Arc<Vector<BoardPos>>> {
         &self.vectors_map[pos]
     }
 }
