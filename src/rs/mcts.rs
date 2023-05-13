@@ -197,7 +197,7 @@ impl McTree {
                 };
                 if depth < 3 {
                     let key = node.borrow().pos_mov.borrow().pos.map_key();
-                    if node.borrow().N > (max_passes / (i32::pow(5, depth as u32))) as i64 / 2 {
+                    if node.borrow().N > 100 {
                         let ch_node = cache.lock().unwrap().get(&key);
                         if ch_node.is_none() || (ch_node.is_some() &&
                             ch_node.unwrap().lock().unwrap().item.lock().unwrap().N < node.borrow().N) {
