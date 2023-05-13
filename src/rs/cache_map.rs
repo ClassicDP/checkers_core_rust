@@ -162,11 +162,11 @@ impl<K, T> CacheMap<K, T>
             let backup_file_path = f_name.clone()+".bak";
 
             // Open the file for reading
-            let mut file = std::fs::File::open(&file_path)?;
-
+            let file = std::fs::File::open(&file_path);
+            if file.is_err() { return  Ok(()) }
             // Read the contents of the file
             let mut contents = String::new();
-            file.read_to_string(&mut contents)?;
+            file.unwrap().read_to_string(&mut contents)?;
 
             // Create a backup file and write the contents to it
             let mut backup_file = std::fs::File::create(&backup_file_path)?;

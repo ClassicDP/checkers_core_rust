@@ -252,7 +252,7 @@ pub fn random_game_test() {
 pub fn main() {
     let cache = Arc::new(Mutex::new(CacheMap::from_file(
         "cache.json".to_string(), |pos_wn: &Arc<Mutex<PositionWN>>| pos_wn.lock().unwrap().map_key(), 500_000)));
-    Arc::new(vec![0;8]).par_iter().for_each(|_| deep_mcts(cache.clone()));
+    Arc::new(vec![0;3]).par_iter().for_each(|_| deep_mcts(cache.clone()));
 
 
     mcts();

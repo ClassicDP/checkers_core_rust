@@ -180,9 +180,9 @@ impl McTree {
     pub fn search(&mut self, max_passes: i32) -> Rc<RefCell<Node>> {
         let mut track: Vec<Rc<RefCell<Node>>> = vec![];
         let hist_len = self.history.borrow().len();
-        fn back_propagation(mut res: i64, track: &mut Vec<Rc<RefCell<Node>>>,
-                            history: &Rc<RefCell<PositionHistory>>, hist_len: usize, cache:
-                            Arc<Mutex<CacheMap<PositionKey, Arc<Mutex<PositionWN>>>>>) {
+        let back_propagation = |mut res: i64, track: &mut Vec<Rc<RefCell<Node>>>,
+                                history: &Rc<RefCell<PositionHistory>>,
+                                hist_len: usize, cache: Arc<Mutex<CacheMap<PositionKey, Arc<Mutex<PositionWN>>>>>| {
             let mut g_len = 0.0;
             let mut depth = track.len();
             for node in track.iter().rev() {
@@ -197,7 +197,7 @@ impl McTree {
                 };
                 if depth < 3 {
                     let key = node.borrow().pos_mov.borrow().pos.map_key();
-                    if node.borrow().N > 500 {
+                    if node.borrow().N > (max_passes / (i32::pow(5, depth as u32))) as i64 / 2 {
                         let ch_node = cache.lock().unwrap().get(&key);
                         if ch_node.is_none() || (ch_node.is_some() &&
                             ch_node.unwrap().lock().unwrap().item.lock().unwrap().N < node.borrow().N) {
@@ -211,7 +211,7 @@ impl McTree {
             }
             history.borrow_mut().cut_to(hist_len);
             *track = vec![];
-        }
+        };
         let mut pass = 0;
         let u = |N: i64, node: &Rc<RefCell<Node>>|
             {
