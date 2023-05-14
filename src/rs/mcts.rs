@@ -178,6 +178,7 @@ impl McTree {
     }
 
     pub fn search(&mut self, max_passes: i32) -> Rc<RefCell<Node>> {
+        let mut cached_passes = 0;
         let mut track: Vec<Rc<RefCell<Node>>> = vec![];
         let hist_len = self.history.borrow().len();
         let back_propagation = |mut res: i64, track: &mut Vec<Rc<RefCell<Node>>>,
@@ -195,9 +196,9 @@ impl McTree {
                     let n = node.borrow().N;
                     (avr * n as f64 + g_len) / (n as f64 + 1.0)
                 };
-                if depth < 3 {
+                if true || depth < 4 {
                     let key = node.borrow().pos_mov.borrow().pos.map_key();
-                    if node.borrow().N > 100 {
+                    if node.borrow().N > 50 {
                         let ch_node = cache.lock().unwrap().get(&key);
                         if ch_node.is_none() || (ch_node.is_some() &&
                             ch_node.unwrap().lock().unwrap().item.lock().unwrap().N < node.borrow().N) {
@@ -267,6 +268,7 @@ impl McTree {
                             let key = x.borrow().pos_mov.borrow().pos.map_key();
                             let pos_wn = self.cache.as_ref().lock().unwrap().get(&key);
                             if let Some(pos_wn) = &pos_wn {
+                                cached_passes += 1;
                                 x.borrow_mut().N = pos_wn.lock().unwrap().item.lock().unwrap().N;
                                 x.borrow_mut().W = pos_wn.lock().unwrap().item.lock().unwrap().W;
                             }
@@ -331,6 +333,7 @@ impl McTree {
                 }
             }
         }
+        // println!("cached: {}", cached_passes);
         if self.root.borrow().finish.is_some() {
             panic!("finish achieved")
         }

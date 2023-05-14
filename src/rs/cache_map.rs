@@ -101,6 +101,12 @@ impl<K, T> CacheMap<K, T>
         }
     }
 
+    pub fn set_repetitions(&mut self, x: &T, repetitions: i32) {
+        let key = self.key(x);
+        let z = self.map.get(&key);
+        if z.is_some() { z.unwrap().lock().unwrap().repetitions = repetitions };
+    }
+
     pub fn insert(&mut self, x: T) {
         let key = &self.key(&x);
         let v = self.map.get(key);
@@ -159,11 +165,11 @@ impl<K, T> CacheMap<K, T>
     pub fn write(&mut self, f_name: String) {
         fn buck_up(f_name: &String) -> std::io::Result<()> {
             let file_path = f_name.clone();
-            let backup_file_path = f_name.clone()+".bak";
+            let backup_file_path = f_name.clone() + ".bak";
 
             // Open the file for reading
             let file = std::fs::File::open(&file_path);
-            if file.is_err() { return  Ok(()) }
+            if file.is_err() { return Ok(()); }
             // Read the contents of the file
             let mut contents = String::new();
             file.unwrap().read_to_string(&mut contents)?;
@@ -189,7 +195,7 @@ impl<K, T> CacheMap<K, T>
                 Ok(mut file) => {
                     let mut contents = String::new();
                     file.read_to_string(&mut contents)?;
-                    let list: LoopArray<Arc<Mutex<Wrapper<T>>>> = serde_json::from_str(&contents)?;
+                    let mut list: LoopArray<Arc<Mutex<Wrapper<T>>>> = serde_json::from_str(&contents)?;
                     Ok(list)
                 }
                 Err(e) => {
@@ -201,22 +207,15 @@ impl<K, T> CacheMap<K, T>
         };
         let freq_list: Result<LoopArray<Arc<Mutex<Wrapper<T>>>>, std::io::Error> = read_freq_list();
         match freq_list {
-            Ok(mut freq_list) => {
-                let mut map = HashMap::new();
-                for item in &freq_list.v {
-                    if item.is_some() {
-                        map.insert((key_fn)(&item.as_ref().unwrap().lock().unwrap().item), item.as_ref().unwrap().clone());
-                    }
+            Ok(freq_list) => {
+                let mut new_map = CacheMap::new(key_fn, max_size);
+                let list = freq_list.get_list();
+                for x in list {
+                    new_map.insert(x.lock().unwrap().item.clone());
+                    let item = x.lock().unwrap().item.clone();
+                    new_map.set_repetitions(&item, x.lock().unwrap().repetitions);
                 }
-                let size = freq_list.v.len();
-                freq_list.v.resize_with(max_size, || None);
-                CacheMap {
-                    max_size,
-                    key_fn: Some(key_fn),
-                    freq_list,
-                    map,
-                    size,
-                }
+                new_map
             }
             Err(e) => {
                 print!("{}\n", e);

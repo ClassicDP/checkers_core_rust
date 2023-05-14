@@ -61,7 +61,7 @@ impl<T> LoopArray<T>
     pub fn get_list(&self) -> Vec<&T> {
         let mut v: Vec<&T> = vec![];
         for i in 0..self.data_size {
-            v.push(self.at(i).as_ref().unwrap());
+            if self.at(i).is_some() { v.push(self.at(i).as_ref().unwrap()); }
         }
         v
     }

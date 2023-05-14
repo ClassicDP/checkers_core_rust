@@ -17,6 +17,7 @@ use crate::mcts::{Cache, McTree, Node, PositionWN};
 use crate::piece::Piece;
 use rayon::prelude::*;
 use std::iter::Iterator;
+use serde_json::Value::String;
 
 include!("lib.rs");
 
@@ -69,7 +70,7 @@ pub fn init_test(game: &mut Game) {
     // game.current_position.next_move = Option::from(Color::White);
 }
 
-pub fn deep_mcts(cache: Cache) {
+pub fn deep_mcts(cache: Cache, passes: i32) {
     let mut game = Game::new(8);
     let mut cache = cache.clone();
     loop {
@@ -80,7 +81,7 @@ pub fn deep_mcts(cache: Cache) {
         }
         let neuron_start = thread_rng().gen_range(0.0..2.0) > 1.0;
         if neuron_start {
-            game.set_mcts_lim(100000);
+            game.set_mcts_lim(passes);
             game.find_mcts_and_make_best_move(true);
         }
         loop {
@@ -99,7 +100,7 @@ pub fn deep_mcts(cache: Cache) {
                 print!("mcts start: {:?} {:?}  {:?}\n", neuron_start, finish, game.position_history.borrow().list.len());
                 break;
             };
-            game.set_mcts_lim(100000);
+            game.set_mcts_lim(passes);
             game.find_mcts_and_make_best_move(true);
 
             // println!("_");
@@ -115,11 +116,11 @@ pub fn deep_mcts(cache: Cache) {
                 -x.lock().unwrap().repetitions
             } else { 0 }
         );
-        println!("trash size: {}", fr_list.iter().filter(|x| {
+        println!("trash size: {}, data size: {}", fr_list.iter().filter(|x| {
             if x.is_some() {
                 x.as_ref().unwrap().lock().unwrap().repetitions < 10
             } else { false }
-        }).collect::<Vec<_>>().len());
+        }).collect::<Vec<_>>().len(), game.tree.as_ref().unwrap().cache.lock().unwrap().freq_list.data_size);
 
         cache = game.tree.as_ref().unwrap().cache.clone();
         game.tree = None;
@@ -250,9 +251,21 @@ pub fn random_game_test() {
 
 
 pub fn main() {
+    let arg = std::env::args().collect::<Vec<_>>();
+    let mut threads_q: usize = 1;
+    let mut cache_size: usize = 1_000_000;
+    let mut pass_q: usize = 500_000;
+    println!("{:?}", arg);
+    let pos = arg.iter().position(|x|*x=="+++".to_string());
+    if pos.is_some() && arg.len() - pos.unwrap() ==4{
+
+        [threads_q, cache_size, pass_q] = <[usize; 3]>::try_from(
+            arg[pos.unwrap()+1..].iter().map(|x| x.parse().unwrap()).collect::<Vec<_>>()).unwrap();
+        println!("set threads_q: {},  cache_size: {}, pass_q: {}", threads_q, cache_size, pass_q);
+    }
     let cache = Arc::new(Mutex::new(CacheMap::from_file(
-        "cache.json".to_string(), |pos_wn: &Arc<Mutex<PositionWN>>| pos_wn.lock().unwrap().map_key(), 500_000)));
-    Arc::new(vec![0;10]).par_iter().for_each(|_| deep_mcts(cache.clone()));
+        "cache.json".to_string(), |pos_wn: &Arc<Mutex<PositionWN>>| pos_wn.lock().unwrap().map_key(), cache_size)));
+    Arc::new(vec![0;threads_q]).par_iter().for_each(|_| deep_mcts(cache.clone(), pass_q as i32));
 
 
     mcts();
