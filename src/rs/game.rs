@@ -465,13 +465,13 @@ impl Game {
 
                 let mut n_max =
                     childs.iter().max_by(|x, y|
-                        x.borrow().N.cmp(&y.borrow().N)).unwrap().borrow().N as i32;
+                        x.borrow().N.cmp(&y.borrow().N)).unwrap().borrow().N;
                 let mut w_min =
                     childs.iter().min_by(|x, y|
-                        x.borrow().W.cmp(&y.borrow().W)).unwrap().borrow().W as i32;
+                        x.borrow().W.cmp(&y.borrow().W)).unwrap().borrow().W;
                 let w_max =
                     childs.iter().max_by(|x, y|
-                        x.borrow().W.cmp(&y.borrow().W)).unwrap().borrow().W as i32;
+                        x.borrow().W.cmp(&y.borrow().W)).unwrap().borrow().W;
                 let mut delta_w = w_max - w_min;
                 if delta_w == 0 {
                     delta_w = w_min;
@@ -487,8 +487,8 @@ impl Game {
                                 (if piece.is_king { 3 } else { 1 }) * if piece.color == Color::White { 1 } else { -1 }
                         }
                     }
-                    board.push(child.borrow().W as i32 - w_min);
-                    board.push(delta_w);
+                    board.push((child.borrow().W - w_min) as i32);
+                    board.push(delta_w as i32);
                     board_list.push(board);
                 }
                 Some(board_list)

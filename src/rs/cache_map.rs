@@ -143,6 +143,11 @@ impl<K, T> CacheMap<K, T>
         if x.is_some() { Some(x.unwrap().clone()) } else { None }
     }
 
+    pub fn get_by_item (&mut self, item: &T)  -> Option<Arc<Mutex<Wrapper<T>>>> {
+        let key = (self.key_fn.unwrap())(item);
+        self.get(&key)
+    }
+
     pub fn resort<SK: Ord>(&mut self, sort_fn: fn(item: Option<T>) -> SK) {
         self.freq_list.v.sort_by_key(|x| (sort_fn)(Some(
             x.as_ref().unwrap().lock().unwrap().item.clone())));
@@ -195,7 +200,7 @@ impl<K, T> CacheMap<K, T>
                 Ok(mut file) => {
                     let mut contents = String::new();
                     file.read_to_string(&mut contents)?;
-                    let mut list: LoopArray<Arc<Mutex<Wrapper<T>>>> = serde_json::from_str(&contents)?;
+                    let list: LoopArray<Arc<Mutex<Wrapper<T>>>> = serde_json::from_str(&contents)?;
                     Ok(list)
                 }
                 Err(e) => {

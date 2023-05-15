@@ -164,7 +164,7 @@ pub fn mcts() {
             let mut list = list0.clone();
             let i = list[0].len() - 2;
             list.sort_by(|x, y| x[i].cmp(&y[i]));
-            let mut i = list.len() - 1;
+            let i = list.len() - 1;
             // if i > 0 { i -= 1; }
             let x0 = list[i].clone();
             let index = list0.iter().enumerate().find(|x| *x.1 == x0).unwrap().0;
@@ -252,9 +252,9 @@ pub fn random_game_test() {
 
 pub fn main() {
     let arg = std::env::args().collect::<Vec<_>>();
-    let mut threads_q: usize = 1;
+    let mut threads_q: usize = 3;
     let mut cache_size: usize = 1_000_000;
-    let mut pass_q: usize = 500_000;
+    let mut pass_q: usize = 100_000;
     println!("{:?}", arg);
     let pos = arg.iter().position(|x|*x=="+++".to_string());
     if pos.is_some() && arg.len() - pos.unwrap() ==4{
