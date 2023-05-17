@@ -367,7 +367,7 @@ impl Game {
         self.position_history.borrow_mut().push_rc(
             node.clone().borrow().pos_mov.clone());
         self.tree = Option::from(McTree::new_from_node(node.clone(), self.position_history.clone(),
-                                                       &mut self.tree.as_mut().unwrap().cache));
+                                                       self.tree.as_mut().unwrap().cache.clone()));
     }
 
 
