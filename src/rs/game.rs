@@ -6,15 +6,12 @@ use crate::color::Color;
 use crate::moves::BoardPos;
 use crate::moves_list::{MoveItem, MoveList};
 use crate::piece::Piece;
-use crate::position::{Position, PositionKey};
+use crate::position::{Position};
 use crate::position_environment::PositionEnvironment;
 use ts_rs::*;
 use serde::Serialize;
-use crate::mcts::{Cache, PositionWN};
 use crate::color::Color::{Black, White};
 use crate::game::Method::{Deep, MCTS};
-use crate::{game, log};
-use crate::cache_map::CacheMap;
 use crate::PositionHistory::FinishType::{BlackWin, Draw1, Draw2, Draw3, Draw4, Draw5, WhiteWin};
 use crate::mcts::{McTree, Node};
 use crate::PositionHistory::{FinishType, PositionAndMove, PositionHistory};
@@ -369,8 +366,8 @@ impl Game {
         self.current_position = node.clone().borrow().pos_mov.borrow().pos.clone();
         self.position_history.borrow_mut().push_rc(
             node.clone().borrow().pos_mov.clone());
-        let cache = self.tree.as_ref().unwrap().cache.clone();
-        self.tree = Option::from(McTree::new_from_node(node.clone(), self.position_history.clone(), cache));
+        self.tree = Option::from(McTree::new_from_node(node.clone(), self.position_history.clone(),
+                                                       &mut self.tree.as_mut().unwrap().cache));
     }
 
 
@@ -380,11 +377,6 @@ impl Game {
         }
     }
 
-
-    pub fn resort_cache(&mut self) {
-        let cache = self.tree.as_ref().unwrap().cache.clone();
-        cache.lock().unwrap().resort(|x|if x.is_some() {-x.unwrap().lock().unwrap().N} else { i64::MAX });
-    }
 
     pub fn check_tree_for_finish(&mut self) -> Option<MCTSRes> {
         self.init_tree();

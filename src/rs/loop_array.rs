@@ -33,7 +33,7 @@ impl<T> LoopArray<T>
         self.p = (self.p + self.data_size - 1) % self.data_size;
     }
 
-    pub fn next_loop_p(&mut self, p: usize) -> Option<usize> {
+    pub fn next_loop_p(&self, p: usize) -> Option<usize> {
         let p = (p + 1) % self.data_size;
         if p == self.p { None } else { Some(p) }
     }
