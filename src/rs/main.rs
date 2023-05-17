@@ -244,9 +244,9 @@ pub fn random_game_test() {
 
 pub fn main() {
     let arg = std::env::args().collect::<Vec<_>>();
-    let mut threads_q: usize = 4;
+    let mut threads_q: usize = 24;
     let mut cache_size: usize = 4_000_000;
-    let mut pass_q: usize = 10_000;
+    let mut pass_q: usize = 100_000;
     println!("{:?}", arg);
     let pos = arg.iter().position(|x|*x=="+++".to_string());
     if pos.is_some() && arg.len() - pos.unwrap() ==4{
