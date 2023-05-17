@@ -4,6 +4,8 @@ use std::io::{BufWriter, Read, Write};
 use std::sync::{Arc, Mutex};
 use serde::{Deserialize, Serialize};
 use dashmap::DashMap;
+use js_sys::WebAssembly::Instance;
+use rand::distributions::uniform::SampleBorrow;
 use crate::loop_array::LoopArray;
 
 trait Repetition {
@@ -186,8 +188,16 @@ impl<K, T> CacheMap<K, T>
             Ok(())
         }
         {
+            let t = std::time::Instant::now();
             {
-                let x = self.lock_file.lock().unwrap();
+                let mut x = self.lock_file.lock().unwrap();
+                *x += 1;
+                if *x < 20 {
+                    return
+                } else {
+                    *x = 0;
+                    println!("Saving...")
+                }
                 if buck_up(&f_name).is_err() {
                     panic!("cant backup cache file");
                 }
@@ -197,10 +207,11 @@ impl<K, T> CacheMap<K, T>
                 let x = self.lock_cache.lock().unwrap();
                 self.get_cache_json()
             };
-            let x= self.lock_file.lock().unwrap();
+            let x = self.lock_file.lock().unwrap();
             let mut f = BufWriter::new(std::fs::File::create(f_name).unwrap());
             f.write(s.as_ref()).unwrap();
             f.flush().unwrap();
+            println!("save file in {:?}", t.elapsed());
         }
     }
 
