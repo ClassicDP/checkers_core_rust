@@ -163,7 +163,7 @@ impl<K, T> CacheMap<K, T>
         serde_json::to_string(&self.freq_list).unwrap()
     }
 
-    pub fn write(&self, f_name: String) {
+    pub fn write(&mut self, f_name: String) {
         fn buck_up(f_name: &String) -> std::io::Result<()> {
             let file_path = f_name.clone();
             let backup_file_path = f_name.clone() + ".bak";
