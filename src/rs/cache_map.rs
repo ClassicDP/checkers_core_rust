@@ -63,6 +63,8 @@ pub struct CacheMap<K, T>
     max_size: usize,
     #[serde(skip)]
     key_fn: Option<KeyFn<T, K>>,
+    lock_cache: Mutex<i32>,
+    lock_file: Mutex<i32>,
 }
 
 impl<K, T> Debug for CacheMap<K, T>
@@ -90,7 +92,9 @@ impl<K, T> CacheMap<K, T>
             max_size,
             size: 0,
             freq_list: v,
-            key_fn
+            key_fn,
+            lock_cache: Mutex::new(0),
+            lock_file: Mutex::new(0),
         }
     }
 
@@ -103,7 +107,7 @@ impl<K, T> CacheMap<K, T>
     pub fn insert(&mut self, x: T) {
         let key = &self.key(&x);
         if let Some(v) = self.map.get(key) {
-           let i =  {
+            let i = {
                 let mut v_w = v.lock().unwrap();
                 v_w.repeat();
                 v_w.item = x;
@@ -113,6 +117,7 @@ impl<K, T> CacheMap<K, T>
             let i_next = self.freq_list.next_loop_p(i);
             if i_next.is_some() {
                 let i_next = i_next.unwrap();
+                let x = self.lock_cache.lock().unwrap();
                 self.freq_list.swap(i, i_next);
                 self.freq_list.v[i].as_mut().unwrap().lock().unwrap().array_pointer = i;
                 self.freq_list.v[i_next].as_mut().unwrap().lock().unwrap().array_pointer = i_next;
@@ -139,7 +144,7 @@ impl<K, T> CacheMap<K, T>
         if x.is_some() { Some(x.unwrap().clone()) } else { None }
     }
 
-    pub fn get_by_item (&mut self, item: &T)  -> Option<Arc<Mutex<Wrapper<T>>>> {
+    pub fn get_by_item(&mut self, item: &T) -> Option<Arc<Mutex<Wrapper<T>>>> {
         let key = (self.key_fn.unwrap())(item);
         self.get(&key)
     }
@@ -163,7 +168,7 @@ impl<K, T> CacheMap<K, T>
         serde_json::to_string(&self.freq_list).unwrap()
     }
 
-    pub fn write(&mut self, f_name: String) {
+    pub fn write(&self, f_name: String) {
         fn buck_up(f_name: &String) -> std::io::Result<()> {
             let file_path = f_name.clone();
             let backup_file_path = f_name.clone() + ".bak";
@@ -180,13 +185,23 @@ impl<K, T> CacheMap<K, T>
             backup_file.write_all(contents.as_bytes())?;
             Ok(())
         }
-        if buck_up(&f_name).is_err() {
-            panic!("cant backup cache file");
+        {
+            {
+                let x = self.lock_file.lock().unwrap();
+                if buck_up(&f_name).is_err() {
+                    panic!("cant backup cache file");
+                }
+            }
+
+            let s = {
+                let x = self.lock_cache.lock().unwrap();
+                self.get_cache_json()
+            };
+            let x= self.lock_file.lock().unwrap();
+            let mut f = BufWriter::new(std::fs::File::create(f_name).unwrap());
+            f.write(s.as_ref()).unwrap();
+            f.flush().unwrap();
         }
-        let s = self.get_cache_json();
-        let mut f = BufWriter::new(std::fs::File::create(f_name).unwrap());
-        f.write(s.as_ref()).unwrap();
-        f.flush().unwrap();
     }
 
     pub fn from_file(f_name: String, key_fn: Option<KeyFn<T, K>>, max_size: usize) -> CacheMap<K, T> {
