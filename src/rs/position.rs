@@ -1,15 +1,10 @@
-use std::cell::RefCell;
 use std::cmp::Ordering;
-use std::hash::{Hash, Hasher};
+use std::hash::{Hash};
 use std::io;
 use std::io::Write;
 use std::mem::swap;
-use std::ops::Deref;
-use std::rc::Rc;
 use std::sync::{Arc, Mutex};
-use rand::{Rng, thread_rng};
-use rayon::prelude::*;
-
+use rand::{Rng};
 use serde::{Deserialize, Serialize};
 use crate::position_environment::PositionEnvironment;
 use crate::vector::Vector;
@@ -18,11 +13,7 @@ use crate::moves_list::{MoveItem, MoveList, Strike};
 use crate::color::Color;
 use crate::piece::Piece;
 use ts_rs::*;
-use wasm_bindgen::prelude::wasm_bindgen;
-use crate::game::BestPos;
 use crate::PositionHistory::PositionAndMove;
-use crate::random;
-
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 #[derive(TS)]
@@ -101,7 +92,12 @@ pub struct Position {
     pub took_pieces: Vec<Option<Piece>>,
 }
 
-pub type PositionKey = (Vec<Option<Piece>>, Option<Color>);
+#[derive(Hash, PartialEq, Serialize)]
+pub struct  PositionKey(pub Vec<Option<Piece>>, pub Option<Color>, pub Vec<Option<Piece>>, pub Option<Color>);
+
+impl Eq for PositionKey {
+
+}
 
 
 impl PartialEq for Position {
@@ -493,10 +489,6 @@ impl Position {
         let ret = move_list.lock().unwrap();
         ret.clone()
     }
-
-    pub fn map_key(&self) -> (Vec<Option<Piece>>, Option<Color>) {
-        (self.cells.clone(), self.next_move)
-    }
 }
 
 #[cfg(test)]
@@ -505,6 +497,7 @@ mod tests {
     use crate::color::Color;
     use crate::game::Game;
     use crate::piece::Piece;
+    use crate::position::Position;
 
     #[test]
     fn positions_eq() {
@@ -529,6 +522,6 @@ mod tests {
         g1.remove_piece(3);
         g2.remove_piece(3);
         assert_eq!(g1.current_position, g2.current_position);
-        assert_eq!(g1.current_position.map_key(), g2.current_position.map_key());
+        let prev_pos = Position::new(g1.current_position.environment.clone());
     }
 }

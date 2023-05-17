@@ -1,24 +1,17 @@
-use std::cell::RefCell;
-use std::cmp::Ordering;
+
 use std::collections::HashMap;
 use std::io;
 use std::io::Write;
-use std::ops::Deref;
-use std::rc::Rc;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, RwLock};
 use rand::{Rng, thread_rng};
 use rayon::prelude::IntoParallelRefIterator;
-use checkers_core::game::Method;
 use crate::cache_map::CacheMap;
 use crate::color::Color;
-use crate::color::Color::Black;
 use crate::game::Game;
-use crate::mcts::{Cache, McTree, Node, PositionWN};
+use crate::mcts::{Cache, CacheItem, Node, PositionWN};
 use crate::piece::Piece;
 use rayon::prelude::*;
 use std::iter::Iterator;
-use serde_json::Value::String;
-
 include!("lib.rs");
 
 #[derive(Debug)]
@@ -70,9 +63,8 @@ pub fn init_test(game: &mut Game) {
     // game.current_position.next_move = Option::from(Color::White);
 }
 
-pub fn deep_mcts(cache: Cache, passes: i32) {
+pub fn deep_mcts(mut cache: Cache, passes: i32) {
     let mut game = Game::new(8);
-    let mut cache = cache.clone();
     loop {
         init(&mut game);
         game.init_tree();
@@ -110,7 +102,7 @@ pub fn deep_mcts(cache: Cache, passes: i32) {
             // print!("{:?}\n", mov.pos_move.unwrap().borrow().mov);
             // print!("{:?}\n", game.tree.as_ref().unwrap().cache.lock().unwrap().freq_list.data_size);
         }
-        let mut fr_list = game.tree.as_ref().unwrap().cache.lock().unwrap().freq_list.v.clone();
+        let mut fr_list = game.tree.as_ref().unwrap().cache.0.read().unwrap().freq_list.v.clone();
         fr_list.sort_by_key(|x|
             if let Some(x) = x {
                 -x.lock().unwrap().repetitions
@@ -120,20 +112,20 @@ pub fn deep_mcts(cache: Cache, passes: i32) {
             if x.is_some() {
                 x.as_ref().unwrap().lock().unwrap().repetitions < 10
             } else { false }
-        }).collect::<Vec<_>>().len(), game.tree.as_ref().unwrap().cache.lock().unwrap().freq_list.data_size);
+        }).collect::<Vec<_>>().len(), game.tree.as_ref().unwrap().cache.0.read().unwrap().freq_list.data_size);
 
-        cache = game.tree.as_ref().unwrap().cache.clone();
+        cache = std::mem::take(&mut game.tree.as_mut().unwrap().cache);
         game.tree = None;
-        cache.lock().unwrap().write("cache.json".to_string());
+        cache.0.write().unwrap().write("cache.json".to_string());
         // let list = &mut cache.borrow().freq_list.v.clone();
         // list.sort_by(|x, y| if x.is_some() && y.is_some() {
         //     y.as_ref().unwrap().borrow().repetitions.cmp(&x.as_ref().unwrap().borrow().repetitions)
         // } else {
-        //     if x.is_some() { Ordering::Less } else { Ordering::Greater }
+        //     if x.is_some() { Ordering::Less }j else { Ordering::Greater }
         // });
         // println!("{:?}\n", &list[..10]);
         let mut rep_map: HashMap<i32, i32> = HashMap::new();
-        for x in &cache.lock().unwrap().freq_list.v {
+        for x in &cache.0.read().unwrap().freq_list.v {
             if x.is_some() {
                 let n = rep_map.get(&x.as_ref().unwrap().lock().unwrap().repetitions);
                 if n.is_some() {
@@ -252,9 +244,9 @@ pub fn random_game_test() {
 
 pub fn main() {
     let arg = std::env::args().collect::<Vec<_>>();
-    let mut threads_q: usize = 3;
-    let mut cache_size: usize = 1_000_000;
-    let mut pass_q: usize = 100_000;
+    let mut threads_q: usize = 2;
+    let mut cache_size: usize = 3_000_000;
+    let mut pass_q: usize = 50_000;
     println!("{:?}", arg);
     let pos = arg.iter().position(|x|*x=="+++".to_string());
     if pos.is_some() && arg.len() - pos.unwrap() ==4{
@@ -263,15 +255,16 @@ pub fn main() {
             arg[pos.unwrap()+1..].iter().map(|x| x.parse().unwrap()).collect::<Vec<_>>()).unwrap();
         println!("set threads_q: {},  cache_size: {}, pass_q: {}", threads_q, cache_size, pass_q);
     }
-    let cache = Arc::new(Mutex::new(CacheMap::from_file(
-        "cache.json".to_string(), |pos_wn: &Arc<Mutex<PositionWN>>| pos_wn.lock().unwrap().map_key(), cache_size)));
-    Arc::new(vec![0;threads_q]).par_iter().for_each(|_| deep_mcts(cache.clone(), pass_q as i32));
+    Arc::new(vec![0;threads_q]).par_iter().for_each(|_| deep_mcts(
+        std::mem::take(&mut Cache(RwLock::new(CacheMap::from_file(
+            "cache.json".to_string(),
+            Some(CacheItem::key), cache_size)))), pass_q as i32));
 
 
+    return;
     mcts();
     mcts_test();
 
-    return;
     // random_game_test();
     let mut game = Game::new(8);
     game.insert_piece(Piece::new(22, Color::White, false));

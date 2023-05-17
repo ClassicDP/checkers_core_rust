@@ -1,18 +1,10 @@
-use std::cell::RefCell;
-use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
 use std::io::{BufWriter, Read, Write};
-use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use serde::{Deserialize, Serialize};
-use serde_json::to_writer;
-use wasm_bindgen::prelude::wasm_bindgen;
-use bincode::serialize_into;
-use serde_with::rust::maps_first_key_wins::serialize;
+use dashmap::DashMap;
 use crate::loop_array::LoopArray;
-use crate::position::{Position, PositionKey};
-
 
 trait Repetition {
     fn n(&self) -> i32;
@@ -65,7 +57,8 @@ pub struct CacheMap<K, T>
 {
     pub freq_list: LoopArray<Arc<Mutex<Wrapper<T>>>>,
     #[serde(skip_serializing)]
-    map: HashMap<K, Arc<Mutex<Wrapper<T>>>>,
+    #[serde(skip_deserializing)]
+    map: DashMap<K, Arc<Mutex<Wrapper<T>>>>,
     size: usize,
     max_size: usize,
     #[serde(skip)]
@@ -89,15 +82,15 @@ impl<K, T> CacheMap<K, T>
         T: Serialize + for<'d> Deserialize<'d> + Clone,
         K: Hash + Eq + Serialize
 {
-    pub fn new(key_fn: KeyFn<T, K>, max_size: usize) -> CacheMap<K, T> {
+    pub fn new(key_fn: Option<KeyFn<T, K>>, max_size: usize) -> CacheMap<K, T> {
         let mut v: LoopArray<Arc<Mutex<Wrapper<T>>>> = LoopArray::new(max_size);
         v.v.resize_with(max_size, || None);
         CacheMap {
-            map: HashMap::new(),
+            map: DashMap::new(),
             max_size,
             size: 0,
             freq_list: v,
-            key_fn: Some(key_fn),
+            key_fn
         }
     }
 
@@ -109,28 +102,31 @@ impl<K, T> CacheMap<K, T>
 
     pub fn insert(&mut self, x: T) {
         let key = &self.key(&x);
-        let v = self.map.get(key);
-        if let Some(v) = v {
-            v.lock().unwrap().repeat();
-            v.lock().unwrap().item = x;
-            let i = v.lock().unwrap().get_array_pointer();
+        if let Some(v) = self.map.get(key) {
+           let i =  {
+                let mut v_w = v.lock().unwrap();
+                v_w.repeat();
+                v_w.item = x;
+                v_w.get_array_pointer()
+            };
+
             let i_next = self.freq_list.next_loop_p(i);
             if i_next.is_some() {
                 let i_next = i_next.unwrap();
                 self.freq_list.swap(i, i_next);
-                self.freq_list.v[i].as_ref().unwrap().lock().unwrap().array_pointer = i;
-                self.freq_list.v[i_next].as_ref().unwrap().lock().unwrap().array_pointer = i_next;
+                self.freq_list.v[i].as_mut().unwrap().lock().unwrap().array_pointer = i;
+                self.freq_list.v[i_next].as_mut().unwrap().lock().unwrap().array_pointer = i_next;
             }
         } else {
-            let wrap = Arc::from(Mutex::from(Wrapper::new(x)));
+            let wrap = Arc::new(Mutex::from(Wrapper::new(x)));
             let (old, pointer) = self.freq_list.push(wrap.clone());
             if old.is_some() {
-                let key = self.key(&old.as_ref().unwrap().as_ref().lock().unwrap().item);
+                let key = (self.key_fn.unwrap())(&old.as_ref().unwrap().as_ref().lock().unwrap().item);
                 self.map.remove(&key);
             }
             wrap.lock().unwrap().set_list_pointer(pointer);
-            let key = self.key(&wrap.lock().unwrap().item);
-            self.map.insert(key, wrap.clone());
+            let key = (self.key_fn.unwrap())(&wrap.lock().unwrap().item);
+            self.map.insert(key, wrap);
         }
     }
 
@@ -138,7 +134,7 @@ impl<K, T> CacheMap<K, T>
         (self.key_fn.unwrap())(item)
     }
 
-    pub fn get(&mut self, key: &K) -> Option<Arc<Mutex<Wrapper<T>>>> {
+    pub fn get(&self, key: &K) -> Option<Arc<Mutex<Wrapper<T>>>> {
         let x = self.map.get(key);
         if x.is_some() { Some(x.unwrap().clone()) } else { None }
     }
@@ -152,8 +148,8 @@ impl<K, T> CacheMap<K, T>
         self.freq_list.v.sort_by_key(|x| (sort_fn)(Some(
             x.as_ref().unwrap().lock().unwrap().item.clone())));
         let list = self.freq_list.v.clone();
-        let mut cache_map = CacheMap::new(self.key_fn.unwrap(), self.max_size);
-        self.map = HashMap::new();
+        let mut cache_map = CacheMap::new(self.key_fn, self.max_size);
+        self.map = DashMap::new();
         for x in list {
             if x.is_some() { cache_map.insert(x.unwrap().lock().unwrap().item.clone()); }
         }
@@ -193,7 +189,7 @@ impl<K, T> CacheMap<K, T>
         f.flush().unwrap();
     }
 
-    pub fn from_file(f_name: String, key_fn: KeyFn<T, K>, max_size: usize) -> CacheMap<K, T> {
+    pub fn from_file(f_name: String, key_fn: Option<KeyFn<T, K>>, max_size: usize) -> CacheMap<K, T> {
         let read_freq_list = || {
             let file = std::fs::File::open(f_name);
             match file {
@@ -280,7 +276,7 @@ mod tests {
         let a2 = vec![2, 2, 2, 2];
         let a3 = vec![3, 3, 3, 3];
         let a4 = vec![4, 4, 4, 4];
-        let mut cache_map = CacheMap::new(|x: &Vec<i32>| x.clone(), 3);
+        let mut cache_map = CacheMap::new(Some(|x: &Vec<i32>| x.clone()), 3);
         cache_map.insert(a1.clone());
         cache_map.insert(a2.clone());
         cache_map.insert(a3.clone());
@@ -294,7 +290,8 @@ mod tests {
         assert_eq!(cache_map.freq_list.at(2).as_ref().unwrap().as_ref().lock().unwrap().item, a2);
         print!("{:?}\n", cache_map.freq_list.get_list());
         cache_map.write("cache.json".to_string());
-        let mut new_cache = CacheMap::from_file("cache.json".to_string(), |x: &Vec<i32>| x.clone(), 3);
+        let mut new_cache = CacheMap::from_file("cache.json".to_string(),
+                                                Some(|x: &Vec<i32>| x.clone()), 3);
         print!("{:?}\n", new_cache.freq_list.get_list());
         new_cache.insert(a1.clone());
         print!("{:?}\n", new_cache.freq_list.get_list());
