@@ -245,7 +245,7 @@ pub fn random_game_test() {
 pub fn main() {
     let arg = std::env::args().collect::<Vec<_>>();
     let mut threads_q: usize = 24;
-    let mut cache_size: usize = 3_000_000;
+    let mut cache_size: usize = 4_000_000;
     let mut pass_q: usize = 100_000;
     println!("{:?}", arg);
     let pos = arg.iter().position(|x|*x=="+++".to_string());
@@ -255,10 +255,9 @@ pub fn main() {
             arg[pos.unwrap()+1..].iter().map(|x| x.parse().unwrap()).collect::<Vec<_>>()).unwrap();
         println!("set threads_q: {},  cache_size: {}, pass_q: {}", threads_q, cache_size, pass_q);
     }
-    Arc::new(vec![0;threads_q]).par_iter().for_each(|_| deep_mcts(
-        std::mem::take(&mut Cache(RwLock::new(CacheMap::from_file(
-            "cache.json".to_string(),
-            Some(CacheItem::key), cache_size)))), pass_q as i32));
+    let cache = Cache(Arc::new(RwLock::new(CacheMap::from_file(
+        "cache.json".to_string(), Some(CacheItem::key), cache_size))));
+    Arc::new(vec![0;threads_q]).par_iter().for_each(|_| deep_mcts(cache.clone(), pass_q as i32));
 
 
     return;

@@ -3,6 +3,7 @@
 /node_modules
 /package-lock.json
 cache.json
+cache.json.bak
 
 # Logs
 logs
