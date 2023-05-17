@@ -116,7 +116,7 @@ pub fn deep_mcts(mut cache: Cache, passes: i32) {
 
         cache = std::mem::take(&mut game.tree.as_mut().unwrap().cache);
         game.tree = None;
-        cache.0.write().unwrap().write("cache.json".to_string());
+        cache.0.read().unwrap().write("cache.json".to_string());
         // let list = &mut cache.borrow().freq_list.v.clone();
         // list.sort_by(|x, y| if x.is_some() && y.is_some() {
         //     y.as_ref().unwrap().borrow().repetitions.cmp(&x.as_ref().unwrap().borrow().repetitions)
@@ -244,9 +244,9 @@ pub fn random_game_test() {
 
 pub fn main() {
     let arg = std::env::args().collect::<Vec<_>>();
-    let mut threads_q: usize = 4;
+    let mut threads_q: usize = 8;
     let mut cache_size: usize = 4_000_000;
-    let mut pass_q: usize = 10_000;
+    let mut pass_q: usize = 20_000;
     println!("{:?}", arg);
     let pos = arg.iter().position(|x|*x=="+++".to_string());
     if pos.is_some() && arg.len() - pos.unwrap() ==4{
