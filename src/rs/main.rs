@@ -2,7 +2,7 @@
 use std::collections::HashMap;
 use std::io;
 use std::io::Write;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 use rand::{Rng, thread_rng};
 use rayon::prelude::IntoParallelRefIterator;
 use crate::cache_map::CacheMap;
@@ -12,7 +12,15 @@ use crate::mcts::{Cache, CacheItem, Node, PositionWN};
 use crate::piece::Piece;
 use rayon::prelude::*;
 use std::iter::Iterator;
+use crate::PositionHistory::FinishType;
+use crate::PositionHistory::FinishType::{BlackWin, WhiteWin};
 include!("lib.rs");
+#[derive(Debug)]
+pub struct Score {
+    m: i32,
+    d: i32
+}
+pub type ThreadScore = Arc<Mutex<Score>>;
 
 #[derive(Debug)]
 struct MoveAsStrike {
@@ -63,8 +71,18 @@ pub fn init_test(game: &mut Game) {
     // game.current_position.next_move = Option::from(Color::White);
 }
 
-pub fn deep_mcts(mut cache: Cache, passes: i32) {
+pub fn deep_mcts(mut cache: Cache, passes: i32, score: ThreadScore) {
     let mut game = Game::new(8);
+    let score_calc = |finish: &FinishType, neuron_start: bool| {
+        if (*finish == BlackWin && !neuron_start) ||
+            (*finish == WhiteWin) && neuron_start {
+            score.lock().unwrap().m +=1;
+        };
+        if (*finish == WhiteWin && !neuron_start) ||
+            (*finish == BlackWin) && neuron_start {
+            score.lock().unwrap().d +=1;
+        };
+    };
     loop {
         init(&mut game);
         game.init_tree();
@@ -79,7 +97,9 @@ pub fn deep_mcts(mut cache: Cache, passes: i32) {
         loop {
             let finish = game.position_history.borrow_mut().finish_check();
             if let Some(finish) = finish {
-                print!("mcts start: {:?} {:?}  {:?}\n", neuron_start, finish, game.position_history.borrow().list.len());
+                score_calc(&finish, neuron_start);
+                print!("mcts start: {:?} {:?}  {:?} {:?}\n",
+                       neuron_start, finish, game.position_history.borrow().list.len(), score.lock().unwrap());
                 break;
             }
             game.set_depth(6);
@@ -89,7 +109,9 @@ pub fn deep_mcts(mut cache: Cache, passes: i32) {
             game.make_best_move(&best_move);
             let finish = game.position_history.borrow_mut().finish_check();
             if let Some(finish) = finish {
-                print!("mcts start: {:?} {:?}  {:?}\n", neuron_start, finish, game.position_history.borrow().list.len());
+                score_calc(&finish, neuron_start);
+                print!("mcts start: {:?} {:?}  {:?} {:?}\n",
+                       neuron_start, finish, game.position_history.borrow().list.len(), score.lock().unwrap());
                 break;
             };
             game.set_mcts_lim(passes);
@@ -248,6 +270,7 @@ pub fn main() {
     let mut cache_size: usize = 4_000_000;
     let mut pass_q: usize = 20_000;
     println!("{:?}", arg);
+    let score: ThreadScore = Arc::new(Mutex::new(Score {d: 0, m: 0}));
     let pos = arg.iter().position(|x|*x=="+++".to_string());
     if pos.is_some() && arg.len() - pos.unwrap() ==4{
 
@@ -257,7 +280,8 @@ pub fn main() {
     }
     let cache = Cache(Arc::new(RwLock::new(CacheMap::from_file(
         "cache.json".to_string(), Some(CacheItem::key), cache_size))));
-    Arc::new(vec![0;threads_q]).par_iter().for_each(|_| deep_mcts(cache.clone(), pass_q as i32));
+    Arc::new(vec![0;threads_q]).par_iter().for_each(|_|
+        deep_mcts(cache.clone(), pass_q as i32, score.clone()));
 
 
     return;
