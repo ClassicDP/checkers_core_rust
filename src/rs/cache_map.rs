@@ -1,4 +1,5 @@
 use std::fmt::{Debug, Formatter};
+use std::fs;
 use std::hash::Hash;
 use std::io::{BufWriter, Read, Write};
 use std::sync::{Arc, Mutex};
@@ -171,21 +172,39 @@ impl<K, T> CacheMap<K, T>
     }
 
     pub fn write(&self, f_name: String) {
+
         fn buck_up(f_name: &String) -> std::io::Result<()> {
+            use std::fs;
+            use std::io;
+            fn copy_file(source_path: &str, destination_path: &str) -> io::Result<()> {
+                let source_file = fs::File::open(source_path)?;
+                let destination_file = fs::File::create(destination_path)?;
+
+                let mut reader = io::BufReader::new(source_file);
+                let mut writer = io::BufWriter::new(destination_file);
+
+                io::copy(&mut reader, &mut writer)?;
+
+                Ok(())
+            }
             let file_path = f_name.clone();
             let backup_file_path = f_name.clone() + ".bak";
+            copy_file(&file_path, &backup_file_path)
 
-            // Open the file for reading
-            let file = std::fs::File::open(&file_path);
-            if file.is_err() { return Ok(()); }
-            // Read the contents of the file
-            let mut contents = String::new();
-            file.unwrap().read_to_string(&mut contents)?;
 
-            // Create a backup file and write the contents to it
-            let mut backup_file = std::fs::File::create(&backup_file_path)?;
-            backup_file.write_all(contents.as_bytes())?;
-            Ok(())
+
+
+            // // Open the file for reading
+            // let file = std::fs::File::open(&file_path);
+            // if file.is_err() { return Ok(()); }
+            // // Read the contents of the file
+            // let mut contents = String::new();
+            // file.unwrap().read_to_string(&mut contents)?;
+            //
+            // // Create a backup file and write the contents to it
+            // let mut backup_file = std::fs::File::create(&backup_file_path)?;
+            // backup_file.write_all(contents.as_bytes())?;
+            // Ok(())
         }
         {
             let t = std::time::Instant::now();

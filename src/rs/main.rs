@@ -244,7 +244,7 @@ pub fn random_game_test() {
 
 pub fn main() {
     let arg = std::env::args().collect::<Vec<_>>();
-    let mut threads_q: usize = 8;
+    let mut threads_q: usize = 4;
     let mut cache_size: usize = 4_000_000;
     let mut pass_q: usize = 20_000;
     println!("{:?}", arg);
