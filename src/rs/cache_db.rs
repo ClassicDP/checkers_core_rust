@@ -1,21 +1,16 @@
 use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
 use std::{fmt, thread};
-use std::ops::Range;
-use std::sync::{Arc, LockResult, RwLock};
+use std::sync::{Arc, RwLock};
 use std::thread::{ThreadId};
 use dashmap::DashMap;
-use dashmap::mapref::one::{Ref, RefMut};
 use mongodb::bson::{Bson, doc, Document, oid::ObjectId, to_document};
 use mongodb::{bson, Client, Collection, Cursor};
 
 use mongodb::options::{Acknowledgment, ClientOptions, InsertOneOptions, UpdateOptions, WriteConcern};
-use schemars::_private::NoSerialize;
 use serde::{Serialize, Deserialize, Serializer};
 use serde::de::DeserializeOwned;
 use serde::ser::SerializeStruct;
-use serde_json::Value;
-use tokio::sync::Mutex;
 
 
 pub type DbKeyFn<K, T> = fn(&T) -> K;
@@ -91,7 +86,6 @@ pub struct CacheDb<K, T>
         K: Hash + Eq + Serialize + 'static
 {
     map: DashMap<K, WrapItem<T>>,
-    map_mutex: Mutex<()>,
     key_fn: DbKeyFn<K, T>,
     db_name: String,
     collection_name: String,
@@ -124,7 +118,6 @@ impl<K, T> CacheDb<K, T>
     pub async fn new(key_fn: DbKeyFn<K, T>, db_name: String, collection_name: String, size_limit: u64, item_update_every: u16, cut_collection_every: u16) -> CacheDb<K, T> {
         CacheDb {
             map: DashMap::new(),
-            map_mutex: Mutex::new(()),
             thread_dbc: Arc::new(DashMap::new()),
             key_fn,
             db_name,
@@ -266,7 +259,7 @@ mod tests {
         let cut_collection_every = 50;
         let max_n = 300;
         let iter_per_worker = 200000;
-        let n_workers = 1;
+        let n_workers = 100;
 
         let cache_db = Arc::new(RwLock::new(
             CacheDb::new(
