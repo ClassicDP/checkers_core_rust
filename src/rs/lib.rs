@@ -13,7 +13,7 @@ pub mod mcts;
 pub mod PositionHistory;
 pub mod cache_map;
 mod loop_array;
-mod cache_db;
+pub mod cache_db;
 
 
 #[wasm_bindgen]

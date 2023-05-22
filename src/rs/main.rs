@@ -12,6 +12,8 @@ use crate::mcts::{Cache, CacheItem, Node, PositionWN};
 use crate::piece::Piece;
 use rayon::prelude::*;
 use std::iter::Iterator;
+use tokio::runtime::Runtime;
+use crate::cache_db::CacheDb;
 use crate::PositionHistory::FinishType;
 use crate::PositionHistory::FinishType::{BlackWin, WhiteWin};
 include!("lib.rs");
@@ -102,7 +104,7 @@ pub fn deep_mcts(mut cache: Cache, passes: i32, score: ThreadScore) {
                        neuron_start, finish, game.position_history.borrow().list.len(), score.lock().unwrap());
                 break;
             }
-            game.set_depth(6);
+            game.set_depth(3);
             let best_move = game.get_best_move_rust();
             // print!("{:?}\n", best_move.get_move_item());
             io::stdout().flush().unwrap();
@@ -124,55 +126,19 @@ pub fn deep_mcts(mut cache: Cache, passes: i32, score: ThreadScore) {
             // print!("{:?}\n", mov.pos_move.unwrap().borrow().mov);
             // print!("{:?}\n", game.tree.as_ref().unwrap().cache.lock().unwrap().freq_list.data_size);
         }
-        let mut fr_list = game.tree.as_ref().unwrap().cache.0.read().unwrap().freq_list.v.clone();
-        fr_list.sort_by_key(|x|
-            if let Some(x) = x {
-                -x.lock().unwrap().repetitions
-            } else { 0 }
-        );
-        println!("trash size: {}, data size: {}", fr_list.iter().filter(|x| {
-            if x.is_some() {
-                x.as_ref().unwrap().lock().unwrap().repetitions < 10
-            } else { false }
-        }).collect::<Vec<_>>().len(), game.tree.as_ref().unwrap().cache.0.read().unwrap().freq_list.data_size);
 
-        cache = std::mem::take(&mut game.tree.as_mut().unwrap().cache);
+        cache = game.tree.as_mut().unwrap().cache.clone();
         game.tree = None;
-        cache.0.read().unwrap().write("cache.json".to_string());
-        // let list = &mut cache.borrow().freq_list.v.clone();
-        // list.sort_by(|x, y| if x.is_some() && y.is_some() {
-        //     y.as_ref().unwrap().borrow().repetitions.cmp(&x.as_ref().unwrap().borrow().repetitions)
-        // } else {
-        //     if x.is_some() { Ordering::Less }j else { Ordering::Greater }
-        // });
-        // println!("{:?}\n", &list[..10]);
-        let mut rep_map: HashMap<i32, i32> = HashMap::new();
-        for x in &cache.0.read().unwrap().freq_list.v {
-            if x.is_some() {
-                let n = rep_map.get(&x.as_ref().unwrap().lock().unwrap().repetitions);
-                if n.is_some() {
-                    rep_map.insert(x.as_ref().unwrap().lock().unwrap().repetitions, n.unwrap() + 1);
-                } else { rep_map.insert(x.as_ref().unwrap().lock().unwrap().repetitions, 1); }
-            }
-        }
-        let mut sorted_keys: Vec<_> = rep_map.keys().collect();
-        sorted_keys.sort();
-        let mut list: Vec<(i32, i32)> = vec![];
-        for x in sorted_keys {
-            list.push((*x, *rep_map.get(&x).unwrap()));
-        }
-        // println!("{:?}", list);
-        drop(list);
-        drop(rep_map);
+
     }
 }
 
-pub fn mcts() {
+pub async fn mcts() {
     let mut game = Game::new(8);
 
     init(&mut game);
     loop {
-        let next = game.find_mcts_and_make_best_move(true);
+        let next = game.find_mcts_and_make_best_move(true).await;
         if next.board_list.is_some() {
             let list0 = next.board_list.unwrap();
             let mut list = list0.clone();
@@ -197,12 +163,12 @@ pub fn mcts() {
 }
 
 
-pub fn mcts_test() {
+pub async fn mcts_test() {
     let mut game = Game::new(8);
 
     init_test(&mut game);
     loop {
-        let next = game.find_mcts_and_make_best_move(true);
+        let next = game.find_mcts_and_make_best_move(true).await;
         if next.board_list.is_some() {
             let list0 = next.board_list.unwrap();
             let mut list = list0.clone();
@@ -266,9 +232,9 @@ pub fn random_game_test() {
 
 pub fn main() {
     let arg = std::env::args().collect::<Vec<_>>();
-    let mut threads_q: usize = 4;
-    let mut cache_size: usize = 4_000_000;
-    let mut pass_q: usize = 20_000;
+    let mut threads_q: usize = 1;
+    let mut cache_size: usize = 10_000_000;
+    let mut pass_q: usize = 5_000;
     println!("{:?}", arg);
     let score: ThreadScore = Arc::new(Mutex::new(Score {d: 0, m: 0}));
     let pos = arg.iter().position(|x|*x=="+++".to_string());
@@ -278,78 +244,15 @@ pub fn main() {
             arg[pos.unwrap()+1..].iter().map(|x| x.parse().unwrap()).collect::<Vec<_>>()).unwrap();
         println!("set threads_q: {},  cache_size: {}, pass_q: {}", threads_q, cache_size, pass_q);
     }
-    let cache = Cache(Arc::new(RwLock::new(CacheMap::from_file(
-        "cache.json".to_string(), Some(CacheItem::key), cache_size))));
-    Arc::new(vec![0;threads_q]).par_iter().for_each(|_|
-        deep_mcts(cache.clone(), pass_q as i32, score.clone()));
+    let runtime = Runtime::new().unwrap();
+    runtime.block_on(async {
+        let cache = Cache(Arc::new(RwLock::new(Some(CacheDb::new(
+            CacheItem::key, "checkers".to_string(),
+            "nodes".to_string(), cache_size as u64 ,
+            1, 1).await))));
+        Arc::new(vec![0;threads_q]).par_iter().for_each(|_|
+            deep_mcts(cache.clone(), pass_q as i32, score.clone()));
+    });
 
 
-    return;
-    mcts();
-    mcts_test();
-
-    // random_game_test();
-    let mut game = Game::new(8);
-    game.insert_piece(Piece::new(22, Color::White, false));
-    game.insert_piece(Piece::new(4, Color::Black, true));
-    game.insert_piece(Piece::new(21, Color::Black, true));
-    game.insert_piece(Piece::new(20, Color::Black, true));
-    game.insert_piece(Piece::new(12, Color::Black, true));
-    game.insert_piece(Piece::new(13, Color::Black, true));
-    game.insert_piece(Piece::new(26, Color::Black, true));
-    game.current_position.next_move = Some(Color::White);
-    let now = Instant::now();
-    for _i in 0..1000000 {
-        let mut list = game.current_position.get_move_list(false);
-        let mut pos_list: Vec<_> = {
-            list.list.iter_mut().map(|x| {
-                let mut pos = game.current_position.make_move_and_get_position(x);
-                game.current_position.unmake_move(x);
-                pos.pos.evaluate(false);
-                pos
-            }).collect()
-        };
-        pos_list.sort_by_key(|x|
-            x.pos.eval.unwrap() * if x.pos.next_move.unwrap() == Color::White { -1 } else { 1 });
-        let po = game.current_position.make_move_and_get_position(&mut list.list[0]);
-        game.position_history.borrow_mut().finish_check();
-        if po.pos != po.pos { break; }
-        game.current_position.unmake_move(&mut list.list[0]);
-    }
-    print!("strike:  {:.2?}\n", now.elapsed());
-
-    let mut game = Game::new(8);
-    game.insert_piece(Piece::new(game.to_pack(47), Color::White, false));
-    game.insert_piece(Piece::new(game.to_pack(63), Color::White, false));
-    game.insert_piece(Piece::new(game.to_pack(15), Color::White, true));
-    vec![54, 43, 20].iter()
-        .for_each(|pos|
-            game.insert_piece(Piece::new(game.to_pack(*pos), Color::Black, false)));
-    game.current_position.next_move = Some(Color::White);
-    use std::time::Instant;
-    let now = Instant::now();
-    for _i in 0..1000000 {
-        let mut list = game.current_position.get_move_list(false);
-        let po = game.current_position.make_move_and_get_position(&mut list.list[0]);
-        if po.pos != po.pos { break; }
-        game.current_position.unmake_move(&mut list.list[0]);
-    }
-    print!("strike 2:  {:.2?}\n", now.elapsed());
-
-
-    let mut game = Game::new(8);
-    game.insert_piece(Piece::new(game.to_pack(16), Color::White, false));
-    game.insert_piece(Piece::new(game.to_pack(18), Color::White, false));
-    game.insert_piece(Piece::new(game.to_pack(20), Color::White, false));
-    game.insert_piece(Piece::new(game.to_pack(22), Color::White, false));
-    game.current_position.next_move = Some(Color::White);
-
-    let now = Instant::now();
-    for _i in 0..1000000 {
-        let mut list = game.current_position.get_move_list(false);
-        let po = game.current_position.make_move_and_get_position(&mut list.list[0]);
-        if po.pos != po.pos { break; }
-        game.current_position.unmake_move(&mut list.list[0]);
-    }
-    print!("simple: {:.2?}\n", now.elapsed());
 }

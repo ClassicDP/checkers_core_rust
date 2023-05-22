@@ -10,6 +10,8 @@ use crate::position::{Position};
 use crate::position_environment::PositionEnvironment;
 use ts_rs::*;
 use serde::Serialize;
+use tokio::runtime::Runtime;
+use tokio::task;
 use crate::color::Color::{Black, White};
 use crate::game::Method::{Deep, MCTS};
 use crate::PositionHistory::FinishType::{BlackWin, Draw1, Draw2, Draw3, Draw4, Draw5, WhiteWin};
@@ -63,9 +65,8 @@ pub struct Game {
     pub tree: Option<McTree>,
 }
 
-#[wasm_bindgen]
+
 impl Game {
-    #[wasm_bindgen(constructor)]
     pub fn new(size: i8) -> Self {
         let environment = Arc::new(PositionEnvironment::new(size));
         let position = Position::new(environment.clone());
@@ -81,33 +82,29 @@ impl Game {
         }
     }
 
-    #[wasm_bindgen]
+
     pub fn set_depth(&mut self, depth: i16) {
         self.max_depth = depth;
     }
 
-    #[wasm_bindgen]
     pub fn set_mcts_lim(&mut self, mcts_lim: i32) {
         self.mcts_lim = mcts_lim;
     }
 
-    #[wasm_bindgen]
+
     pub fn set_method(&mut self, method: Method) {
         self.method = method;
     }
 
-    #[wasm_bindgen]
     pub fn insert_piece(&mut self, piece: Piece) {
         self.current_position.insert_piece(piece);
     }
 
-    #[wasm_bindgen]
     pub fn remove_piece(&mut self, pos: BoardPos) -> bool {
         self.current_position.remove_piece(pos)
     }
 
 
-    #[wasm_bindgen(getter)]
     pub fn position(&self) -> JsValue {
         match serde_wasm_bindgen::to_value(&self.current_position) {
             Ok(js) => js,
@@ -126,7 +123,7 @@ impl Game {
             .push(PositionAndMove::from(self.current_position.clone(), move_item.clone()))
     }
 
-    #[wasm_bindgen]
+
     pub fn best_move(&mut self, mut max_depth: i16, mut best_white: i32,
                      mut best_black: i32, depth: i16, state_only: bool) -> BestPos {
         // log(&format!("{:?}", self.current_position));
@@ -261,8 +258,7 @@ impl Game {
         best_move
     }
 
-    #[wasm_bindgen]
-    pub fn get_or_apply_best_move(&mut self, apply: bool) -> JsValue {
+    pub async fn get_or_apply_best_move(&mut self, apply: bool) -> JsValue {
         let finish = self.position_history.borrow_mut().finish_check();
         if finish.is_some() {
             return match serde_wasm_bindgen::to_value(&finish.unwrap()) {
@@ -279,7 +275,7 @@ impl Game {
                 best_move
             }
             MCTS => {
-                let best = self.find_mcts_and_make_best_move(apply);
+                let best = self.find_mcts_and_make_best_move(apply).await;
                 BestPos { pos: best.pos_move, pos_list: vec![], deep_eval: 0 }
             }
             Method::Mix => {
@@ -293,7 +289,7 @@ impl Game {
         }
     }
 
-    #[wasm_bindgen]
+
     pub fn make_best_move(&mut self, pos: &BestPos) {
         // log(&format!("{:?}", pos));
         self.make_move_by_pos_item(pos);
@@ -321,7 +317,7 @@ impl Game {
         }
         board_list
     }
-    #[wasm_bindgen]
+
     pub fn find_and_make_best_move_ts_n(&mut self) -> JsValue {
         let finish = self.position_history.borrow_mut().finish_check();
         if finish.is_some() {
@@ -346,21 +342,7 @@ impl Game {
         };
     }
 
-    #[wasm_bindgen]
-    pub fn find_mcts_and_make_best_move_ts_n(&mut self, apply: bool) -> JsValue {
-        let res: MCTSRes = self.find_mcts_and_make_best_move(apply);
-        return if res.board_list.is_some() {
-            match serde_wasm_bindgen::to_value(&res.board_list.unwrap()) {
-                Ok(js) => js,
-                Err(_err) => JsValue::UNDEFINED
-            }
-        } else {
-            match serde_wasm_bindgen::to_value(&res.finish.unwrap()) {
-                Ok(js) => js,
-                Err(_err) => JsValue::UNDEFINED
-            }
-        };
-    }
+
 
     fn apply_node_move(&mut self, node: Rc<RefCell<Node>>) {
         self.current_position = node.clone().borrow().pos_mov.borrow().pos.clone();
@@ -417,8 +399,8 @@ impl Game {
         self.tree.as_mut().unwrap().root.borrow_mut().expand();
     }
 
-    #[wasm_bindgen]
-    pub fn find_mcts_and_make_best_move(&mut self, apply: bool) -> MCTSRes {
+
+    pub async fn find_mcts_and_make_best_move(&mut self, apply: bool) -> MCTSRes {
 
         self.preparing_tree();
         // let finish = self.check_tree_for_finish();
@@ -438,7 +420,9 @@ impl Game {
         if finish.is_some() {
             return finish.unwrap()
         }
-        let node = self.tree.as_mut().unwrap().search(self.mcts_lim);
+        let node = self.tree.as_mut().unwrap().search(self.mcts_lim).await;
+
+
         if apply {
             self.apply_node_move(node.clone());
         }
@@ -490,7 +474,7 @@ impl Game {
         return MCTSRes { finish: None, board_list, pos_move: Some(node.borrow().pos_mov.clone()) };
     }
 
-    #[wasm_bindgen]
+
     pub fn get_board_list_ts_n(&mut self) -> JsValue {
         return match serde_wasm_bindgen::to_value(&self.get_board_list()) {
             Ok(js) => js,
@@ -498,7 +482,7 @@ impl Game {
         };
     }
 
-    #[wasm_bindgen]
+
     pub fn mov_back(&mut self) {
         if self.position_history.borrow().list.len() > 1 {
             let mut pop = self.position_history.borrow_mut().pop();
@@ -509,7 +493,7 @@ impl Game {
         }
     }
 
-    #[wasm_bindgen]
+
     pub fn move_by_tree_index_ts_n(&mut self, i: usize) -> JsValue {
         return match serde_wasm_bindgen::to_value(&self.move_by_tree_index(i)) {
             Ok(js) => js,
@@ -523,7 +507,7 @@ impl Game {
         return self.make_move_by_move_item(&node.borrow_mut().get_move().unwrap());
     }
 
-    #[wasm_bindgen]
+
     pub fn move_by_index_ts_n(&mut self, i: i32) -> JsValue {
         if let Some(ref move_list) = self.current_position.get_move_list_cached().as_ref() {
             let len = move_list.list.len() as i32;
@@ -547,7 +531,7 @@ impl Game {
         }
     }
 
-    #[wasm_bindgen]
+
     pub fn get_best_move_rust(&mut self) -> BestPos {
         self.best_move(self.max_depth, i32::MIN / 2, i32::MAX / 2, 0, false)
     }
@@ -556,17 +540,17 @@ impl Game {
         return format!("{:?}", self.current_position.state);
     }
 
-    #[wasm_bindgen]
+
     pub fn to_board(&self, pack_index: BoardPos) -> BoardPos {
         self.position_environment.pack_to_board[pack_index]
     }
 
-    #[wasm_bindgen]
+
     pub fn to_pack(&self, board_index: BoardPos) -> BoardPos {
         self.position_environment.board_to_pack[board_index]
     }
 
-    #[wasm_bindgen]
+
     pub fn get_move_list_for_front(&mut self) -> JsValue {
         let move_list = self.get_move_list(true);
         match serde_wasm_bindgen::to_value(&move_list) {
@@ -579,7 +563,6 @@ impl Game {
         self.current_position.get_move_list(for_front)
     }
 
-    #[wasm_bindgen(getter = moveColor)]
     pub fn get_color(&self) -> JsValue {
         match self.current_position.next_move {
             Some(color) => match serde_wasm_bindgen::to_value(&color) {
@@ -590,12 +573,12 @@ impl Game {
         }
     }
 
-    #[wasm_bindgen(setter = moveColor)]
+
     pub fn set_color(&mut self, color: Color) {
         self.current_position.next_move = Some(color);
     }
 
-    #[wasm_bindgen]
+
     pub fn make_move_for_front(&mut self, pos_chain: &JsValue) -> Result<JsValue, JsValue> {
         let mut pos_list: Vec<BoardPos> = Vec::new();
         let iterator = js_sys::try_iter(pos_chain)?.ok_or_else(|| {

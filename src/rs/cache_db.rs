@@ -3,6 +3,7 @@ use std::hash::Hash;
 use std::{fmt, thread};
 use std::sync::{Arc, RwLock};
 use std::thread::{ThreadId};
+use async_std::prelude::StreamExt;
 use dashmap::DashMap;
 use mongodb::bson::{Bson, doc, Document, oid::ObjectId, to_document};
 use mongodb::{bson, Client, Collection, Cursor};
@@ -21,6 +22,7 @@ pub struct WrapItem<T>
         T: Serialize + Unpin + Send + Sync + Clone,
 {
     item: Arc<RwLock<T>>,
+    #[serde(rename = "_id")]
     id: ObjectId,
     repetitions: u64,
     #[serde(skip)]
@@ -64,7 +66,7 @@ impl<T> Into<Document> for WrapItem<T>
 
 impl<T> WrapItem<T>
     where
-        T: DeserializeOwned + Unpin + Send + Sync + Clone + Serialize ,
+        T: DeserializeOwned + Unpin + Send + Sync + Clone + Serialize,
 {
     pub fn new(item: T) -> WrapItem<T> {
         WrapItem {
@@ -114,7 +116,7 @@ impl<K, T> Debug for CacheDb<K, T>
 impl<K, T> CacheDb<K, T>
     where
         T: Serialize + DeserializeOwned + Unpin + Send + Sync + Clone,
-        K: Hash + Eq + Serialize + 'static  {
+        K: Hash + Eq + Serialize + 'static {
     pub async fn new(key_fn: DbKeyFn<K, T>, db_name: String, collection_name: String, size_limit: u64, item_update_every: u16, cut_collection_every: u16) -> CacheDb<K, T> {
         CacheDb {
             map: DashMap::new(),
@@ -143,6 +145,28 @@ impl<K, T> CacheDb<K, T>
             self.thread_dbc.get_mut(&thread::current().id()).unwrap();
         collection.value_mut().drop(None).await.unwrap();
     }
+
+    pub async fn read_collection(&mut self) {
+        let collection = self.thread_dbc.get_mut(&thread::current().id()).unwrap();
+        let mut cursor = collection.find(None, None).await.unwrap();
+
+        while let Some(result) = cursor.next().await {
+            match result {
+                Ok(document) => {
+                    let item = document.item.read().unwrap().clone();
+                    let key = (self.key_fn)(&item);
+                    let mut wrap_item = WrapItem::new(item);
+                    wrap_item.id = document.id;
+                    wrap_item.repetitions = document.repetitions;
+                    self.map.insert(key, wrap_item);
+                }
+                Err(e) => {
+                    panic!("Error in read collection")
+                }
+            }
+        }
+    }
+
 
     pub async fn collection_req(&mut self, pipeline: Vec<Document>) -> mongodb::error::Result<Cursor<Document>> {
         let mut collection =
@@ -259,7 +283,7 @@ mod tests {
         let cut_collection_every = 50;
         let max_n = 300;
         let iter_per_worker = 200000;
-        let n_workers = 100;
+        let n_workers = 10;
 
         let cache_db = Arc::new(RwLock::new(
             CacheDb::new(
@@ -268,7 +292,8 @@ mod tests {
         );
 
         cache_db.write().unwrap().init_database().await;
-        cache_db.write().unwrap().drop_collection().await;
+        cache_db.write().unwrap().read_collection().await;
+        let mut repetitions = get_repetitions(&cache_db).await;
 
         let time = Instant::now();
         let mut xx = vec![];
@@ -293,7 +318,21 @@ mod tests {
             let y = x.await;
         }
 
+        async fn get_repetitions(cache_db: &Arc<RwLock<CacheDb<i64, Test>>>) -> i64 {
+            let pipeline = vec![
+                doc! {
+            "$group": {
+                "_id": null,
+                "totalRepetitions": { "$sum": "$repetitions" }
+            }
+        }
+            ];
+            let doc =
+                cache_db.write().unwrap().collection_req(pipeline).await.unwrap().next().await;
+            doc.unwrap().unwrap().get("totalRepetitions").and_then(Bson::as_i64).unwrap()
+        }
         cache_db.write().unwrap().flush().await;
+
 
         println!("{:?}", time.elapsed());
 
@@ -307,8 +346,7 @@ mod tests {
         ];
         let doc =
             cache_db.write().unwrap().collection_req(pipeline).await.unwrap().next().await;
-        let repetitions =
-            doc.unwrap().unwrap().get("totalRepetitions").and_then(Bson::as_i64).unwrap();
+        repetitions = get_repetitions(&cache_db).await - repetitions;
         assert_eq!(repetitions, iter_per_worker * n_workers);
 
         let pipeline = vec![
