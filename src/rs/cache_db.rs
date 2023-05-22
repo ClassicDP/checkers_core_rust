@@ -79,108 +79,7 @@ impl<T> WrapItem<T>
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use std::sync::{Arc, RwLock};
-    use async_std::prelude::StreamExt;
-    use mongodb::bson::{Bson, doc};
-    use rand::Rng;
-    use serde_derive::{Deserialize, Serialize};
-    use crate::cache_db::{CacheDb, DbKeyFn};
 
-    #[derive(Debug, Deserialize, Serialize, Clone)]
-    struct Test {
-        v: Vec<i32>,
-        n: i64,
-    }
-
-    impl Test {
-        pub fn new(max_n: i64) -> Test {
-            Test {
-                v: (0..4).collect(),
-                n: rand::thread_rng().gen_range(0..max_n),
-            }
-        }
-    }
-
-    #[tokio::test]
-    async fn cache() {
-        let key_fn: DbKeyFn<i64, Test> = |x| x.n;
-        let db_name = String::from("test");
-        let size_limit = 200;
-        let item_update_every = 100;
-        let cut_collection_every = 50;
-        let max_n = 500;
-        let iter_per_worker = 20000;
-
-        let cache_db = Arc::new(RwLock::new(
-            CacheDb::new(key_fn, db_name, size_limit, item_update_every, cut_collection_every).await),
-        );
-
-        cache_db.write().unwrap().init_database().await;
-        cache_db.write().unwrap().drop_collection().await;
-
-
-        let n_workers = 20;
-        let mut xx = vec![];
-        for _ in 0..n_workers {
-            let db = cache_db.clone();
-
-            let x = tokio::task::spawn_blocking(move || {
-                tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .build()
-                    .unwrap()
-                    .block_on(async {
-                        db.write().unwrap().init_database().await;
-                        for _ in 0..iter_per_worker {
-                            db.read().unwrap().insert(Test::new(max_n)).await;
-                        }
-                    });
-            });
-            xx.push(x);
-        }
-        for x in xx {
-            let y = x.await;
-        }
-
-        cache_db.write().unwrap().flush().await;
-
-        let pipeline = vec![
-            doc! {
-            "$group": {
-                "_id": null,
-                "totalRepetitions": { "$sum": "$repetitions" }
-            }
-        }
-        ];
-
-        let doc =
-            cache_db.write().unwrap().collection_req(pipeline).await.unwrap().next().await;
-
-        let repetitions =
-            doc.unwrap().unwrap().get("totalRepetitions").and_then(Bson::as_i64).unwrap();
-        assert_eq!(repetitions, iter_per_worker * n_workers);
-
-        let pipeline = vec![
-            doc! {
-            "$count": "totalItems"
-        }];
-
-
-        let mut doc =
-            cache_db.write().unwrap().collection_req(pipeline).await.unwrap().next().await;
-
-        let x = {
-            let x = doc.as_mut().unwrap().as_mut().unwrap().get("totalItems").unwrap();
-            x
-        };
-        let total_items = x.clone().as_i32().unwrap();
-
-
-        assert_eq!(total_items as i64, max_n);
-    }
-}
 
 
 pub struct CacheDb<K, T>
@@ -270,13 +169,15 @@ impl<K, T> CacheDb<K, T>
 
     pub async fn insert(&self, item: T) {
         let key = (self.key_fn)(&item);
+        let mut lock = self.map_mutex.lock().await;
         {
             let val = {
-                let lock = self.map_mutex.lock().await;
                 self.map.get_mut(&key)
             };
 
+            // insert ti db
             if let Some(mut val) = val {
+                drop(lock);
                 val.value_mut().repetitions += 1;
                 val.value_mut().write_counts += 1;
                 if val.write_counts == self.item_update_every {
@@ -286,8 +187,10 @@ impl<K, T> CacheDb<K, T>
                 return;
             }
         }
+        // update in db
         let wrap_item = WrapItem::new(item);
         self.map.insert(key.clone(), wrap_item);
+        drop(lock);
         let mut val = self.map.get_mut(&key).unwrap();
         val.id = self.db_insert(&mut val).await.as_object_id().unwrap();
         // println!("{:?}", self.map.len());
@@ -306,5 +209,101 @@ impl<K, T> CacheDb<K, T>
         //             }
         //         }
         //     }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{Arc, RwLock};
+    use async_std::prelude::StreamExt;
+    use mongodb::bson::{Bson, doc};
+    use rand::Rng;
+    use serde_derive::{Deserialize, Serialize};
+    use tokio::time::Instant;
+    use crate::cache_db::{CacheDb, DbKeyFn};
+
+    #[derive(Debug, Deserialize, Serialize, Clone)]
+    struct Test {
+        v: Vec<i32>,
+        n: i64,
+    }
+
+    impl Test {
+        pub fn new(max_n: i64) -> Test {
+            Test {
+                v: (0..4).collect(),
+                n: rand::thread_rng().gen_range(0..max_n),
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn cache() {
+        let key_fn: DbKeyFn<i64, Test> = |x| x.n;
+        let db_name = String::from("test");
+        let size_limit = 200;
+        let item_update_every = 100;
+        let cut_collection_every = 50;
+        let max_n = 500;
+        let iter_per_worker = 20000;
+
+        let cache_db = Arc::new(RwLock::new(
+            CacheDb::new(key_fn, db_name, size_limit, item_update_every, cut_collection_every).await),
+        );
+
+        cache_db.write().unwrap().init_database().await;
+        cache_db.write().unwrap().drop_collection().await;
+
+        let time = Instant::now();
+        let n_workers = 20;
+        let mut xx = vec![];
+        for _ in 0..n_workers {
+            let db = cache_db.clone();
+
+            let x = tokio::task::spawn_blocking(move || {
+                tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .unwrap()
+                    .block_on(async {
+                        db.write().unwrap().init_database().await;
+                        for _ in 0..iter_per_worker {
+                            db.read().unwrap().insert(Test::new(max_n)).await;
+                        }
+                    });
+            });
+            xx.push(x);
+        }
+        for x in xx {
+            let y = x.await;
+        }
+
+        cache_db.write().unwrap().flush().await;
+
+        println!("{:?}", time.elapsed());
+
+        let pipeline = vec![
+            doc! {
+            "$group": {
+                "_id": null,
+                "totalRepetitions": { "$sum": "$repetitions" }
+            }
+        }
+        ];
+        let doc =
+            cache_db.write().unwrap().collection_req(pipeline).await.unwrap().next().await;
+        let repetitions =
+            doc.unwrap().unwrap().get("totalRepetitions").and_then(Bson::as_i64).unwrap();
+        assert_eq!(repetitions, iter_per_worker * n_workers);
+
+        let pipeline = vec![
+            doc! {
+            "$count": "totalItems"
+        }];
+        let mut doc =
+            cache_db.write().unwrap().collection_req(pipeline).await.unwrap().next().await;
+        let x =  doc.as_mut().unwrap().as_mut().unwrap().get("totalItems").unwrap();
+        let total_items = x.clone().as_i32().unwrap();
+        assert_eq!(total_items as i64, max_n);
     }
 }
