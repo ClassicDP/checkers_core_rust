@@ -80,8 +80,6 @@ impl<T> WrapItem<T>
 }
 
 
-
-
 pub struct CacheDb<K, T>
     where
         T: Serialize + DeserializeOwned + Unpin + Send + Sync + Clone + Debug,
@@ -169,30 +167,27 @@ impl<K, T> CacheDb<K, T>
 
     pub async fn insert(&self, item: T) {
         let key = (self.key_fn)(&item);
-        let mut lock = self.map_mutex.lock().await;
-        {
-            let val = {
-                self.map.get_mut(&key)
-            };
-
-            // insert ti db
-            if let Some(mut val) = val {
-                drop(lock);
-                val.value_mut().repetitions += 1;
-                val.value_mut().write_counts += 1;
-                if val.write_counts == self.item_update_every {
-                    val.value_mut().write_counts = 0;
-                    self.db_update(val.value()).await;
-                }
-                return;
-            }
-        }
-        // update in db
-        let wrap_item = WrapItem::new(item);
-        self.map.insert(key.clone(), wrap_item);
-        drop(lock);
+        let mut is_new = false;
+        self.map.entry(key.clone()).or_insert_with(|| {
+            is_new = true;
+            WrapItem::new(item)
+        });
         let mut val = self.map.get_mut(&key).unwrap();
-        val.id = self.db_insert(&mut val).await.as_object_id().unwrap();
+
+        // update in db
+        if !is_new {
+            val.value_mut().repetitions += 1;
+            val.value_mut().write_counts += 1;
+            if val.write_counts == self.item_update_every {
+                val.value_mut().write_counts = 0;
+                self.db_update(val.value()).await;
+            }
+        } else {
+            // insert to db
+            val.id = self.db_insert(&mut val).await.as_object_id().unwrap();
+        }
+
+
         // println!("{:?}", self.map.len());
 
 
@@ -302,7 +297,7 @@ mod tests {
         }];
         let mut doc =
             cache_db.write().unwrap().collection_req(pipeline).await.unwrap().next().await;
-        let x =  doc.as_mut().unwrap().as_mut().unwrap().get("totalItems").unwrap();
+        let x = doc.as_mut().unwrap().as_mut().unwrap().get("totalItems").unwrap();
         let total_items = x.clone().as_i32().unwrap();
         assert_eq!(total_items as i64, max_n);
     }
