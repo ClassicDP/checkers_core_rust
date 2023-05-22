@@ -92,7 +92,7 @@ pub struct Position {
     pub took_pieces: Vec<Option<Piece>>,
 }
 
-#[derive(Hash, PartialEq, Serialize)]
+#[derive(Hash, PartialEq, Serialize, Debug)]
 pub struct  PositionKey(pub Vec<Option<Piece>>, pub Option<Color>, pub Vec<Option<Piece>>, pub Option<Color>);
 
 impl Eq for PositionKey {
