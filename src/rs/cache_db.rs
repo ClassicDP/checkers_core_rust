@@ -89,6 +89,7 @@ pub struct CacheDb<K, T>
     map_mutex: Mutex<()>,
     key_fn: DbKeyFn<K, T>,
     db_file_name: String,
+    collection_name: String,
     thread_dbc: Arc<DashMap<ThreadId, Collection<WrapItem<T>>>>,
     size_limit: u64,
     item_update_every: u16,
@@ -101,13 +102,14 @@ impl<K, T> CacheDb<K, T>
     where
         T: Serialize + DeserializeOwned + Unpin + Send + Sync + Clone + Debug,
         K: Hash + Eq + Serialize + 'static + Clone + Debug {
-    pub async fn new(key_fn: DbKeyFn<K, T>, db_file_name: String, size_limit: u64, item_update_every: u16, cut_collection_every: u16) -> CacheDb<K, T> {
+    pub async fn new(key_fn: DbKeyFn<K, T>, db_file_name: String, collection_name: String, size_limit: u64, item_update_every: u16, cut_collection_every: u16) -> CacheDb<K, T> {
         CacheDb {
             map: DashMap::new(),
             map_mutex: Mutex::new(()),
             thread_dbc: Arc::new(DashMap::new()),
             key_fn,
             db_file_name,
+            collection_name,
             size_limit,
             item_update_every,
             cut_collection_every,
@@ -120,7 +122,7 @@ impl<K, T> CacheDb<K, T>
         let client_options = ClientOptions::parse("mongodb://localhost:27017").await.unwrap();
         let client = Client::with_options(client_options).unwrap();
         let database = client.database(&self.db_file_name);
-        let collection = database.collection::<WrapItem<T>>("items");
+        let collection = database.collection::<WrapItem<T>>(&self.collection_name);
         self.thread_dbc.insert(thread_id, collection);
     }
 
@@ -236,21 +238,24 @@ mod tests {
     async fn cache() {
         let key_fn: DbKeyFn<i64, Test> = |x| x.n;
         let db_name = String::from("test");
+        let collection_name = String::from("items");
         let size_limit = 200;
         let item_update_every = 100;
         let cut_collection_every = 50;
-        let max_n = 500;
-        let iter_per_worker = 20000;
+        let max_n = 300;
+        let iter_per_worker = 200000;
+        let n_workers = 8;
 
         let cache_db = Arc::new(RwLock::new(
-            CacheDb::new(key_fn, db_name, size_limit, item_update_every, cut_collection_every).await),
+            CacheDb::new(
+                key_fn, db_name, collection_name, size_limit,
+                item_update_every, cut_collection_every).await),
         );
 
         cache_db.write().unwrap().init_database().await;
         cache_db.write().unwrap().drop_collection().await;
 
         let time = Instant::now();
-        let n_workers = 20;
         let mut xx = vec![];
         for _ in 0..n_workers {
             let db = cache_db.clone();
