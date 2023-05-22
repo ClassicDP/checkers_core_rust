@@ -1,18 +1,19 @@
 use std::fmt::Debug;
 use std::hash::Hash;
-use std::{io, thread};
-use std::io::Write;
+use std::{thread};
+use std::ops::Range;
 use std::sync::{Arc, RwLock};
 use std::thread::{ThreadId};
 use dashmap::DashMap;
+use dashmap::mapref::one::{Ref, RefMut};
 use mongodb::bson::{Bson, doc, Document, oid::ObjectId, to_document};
-use mongodb::{bson, Client, Collection, Database};
+use mongodb::{bson, Client, Collection, Cursor};
 
-use mongodb::options::{Acknowledgment, ClientOptions, FindOneOptions, InsertOneOptions, UpdateOptions, WriteConcern};
-use mongodb::results::{InsertOneResult, UpdateResult};
+use mongodb::options::{Acknowledgment, ClientOptions, InsertOneOptions, UpdateOptions, WriteConcern};
 use serde::{Serialize, Deserialize, Serializer};
 use serde::de::DeserializeOwned;
 use serde::ser::SerializeStruct;
+use tokio::sync::Mutex;
 
 
 pub type DbKeyFn<K, T> = fn(&T) -> K;
@@ -37,7 +38,7 @@ impl<T: Serialize> Serialize for WrapItem<T>
         where
             S: Serializer,
     {
-        let mut state = serializer.serialize_struct("WrapItem", 2)?;
+        let mut state = serializer.serialize_struct("WrapItem", 3)?;
         state.serialize_field("item", &*self.item.read().unwrap())?;
         state.serialize_field("repetitions", &self.repetitions)?;
         state.serialize_field("_id", &self.id)?;
@@ -72,7 +73,7 @@ impl<T> WrapItem<T>
         WrapItem {
             item: RwLock::new(item),
             id: ObjectId::default(),
-            repetitions: 0,
+            repetitions: 1,
             write_counts: 0,
         }
     }
@@ -81,6 +82,8 @@ impl<T> WrapItem<T>
 #[cfg(test)]
 mod tests {
     use std::sync::{Arc, RwLock};
+    use async_std::prelude::StreamExt;
+    use mongodb::bson::{Bson, doc};
     use rand::Rng;
     use serde_derive::{Deserialize, Serialize};
     use crate::cache_db::{CacheDb, DbKeyFn};
@@ -92,10 +95,10 @@ mod tests {
     }
 
     impl Test {
-        pub fn new() -> Test {
+        pub fn new(max_n: i64) -> Test {
             Test {
                 v: (0..4).collect(),
-                n: rand::thread_rng().gen_range(0..4),
+                n: rand::thread_rng().gen_range(0..max_n),
             }
         }
     }
@@ -107,16 +110,21 @@ mod tests {
         let size_limit = 200;
         let item_update_every = 100;
         let cut_collection_every = 20;
+        let max_n = 1000;
+        let iter_per_worker = 20000;
 
         let cache_db = Arc::new(RwLock::new(
             CacheDb::new(key_fn, db_name, size_limit, item_update_every, cut_collection_every).await),
         );
 
+        cache_db.write().unwrap().init_database().await;
+        cache_db.write().unwrap().drop_collection().await;
 
-        let n_workers = 4;
+
+        let n_workers = 20;
         let mut xx = vec![];
         for _ in 0..n_workers {
-            let mut db = cache_db.clone();
+            let db = cache_db.clone();
 
             let x = tokio::task::spawn_blocking(move || {
                 tokio::runtime::Builder::new_current_thread()
@@ -125,8 +133,8 @@ mod tests {
                     .unwrap()
                     .block_on(async {
                         db.write().unwrap().init_database().await;
-                        for _ in 0..1000000 {
-                            db.read().unwrap().insert(Test::new()).await;
+                        for _ in 0..iter_per_worker {
+                            db.read().unwrap().insert(Test::new(max_n)).await;
                         }
                     });
             });
@@ -135,6 +143,24 @@ mod tests {
         for x in xx {
             let y = x.await;
         }
+
+        cache_db.write().unwrap().flush().await;
+
+        let pipeline = vec![
+            doc!{
+            "$group": {
+                "_id": null,
+                "totalRepetitions": { "$sum": "$repetitions" }
+            }
+        }
+        ];
+
+        let doc = cache_db.write().unwrap().collection_req(pipeline).await.next().await;
+
+        let repetitions =
+            doc.unwrap().unwrap().get("totalRepetitions").and_then(Bson::as_i64).unwrap();
+        assert_eq!(repetitions, iter_per_worker * n_workers);
+
     }
 }
 
@@ -145,6 +171,7 @@ pub struct CacheDb<K, T>
         K: Hash + Eq + Serialize + 'static + Clone + Debug
 {
     map: DashMap<K, WrapItem<T>>,
+    map_mutex: Mutex<()>,
     key_fn: DbKeyFn<K, T>,
     db_file_name: String,
     thread_dbc: Arc<DashMap<ThreadId, Collection<WrapItem<T>>>>,
@@ -162,6 +189,7 @@ impl<K, T> CacheDb<K, T>
     pub async fn new(key_fn: DbKeyFn<K, T>, db_file_name: String, size_limit: u64, item_update_every: u16, cut_collection_every: u16) -> CacheDb<K, T> {
         CacheDb {
             map: DashMap::new(),
+            map_mutex: Mutex::new(()),
             thread_dbc: Arc::new(DashMap::new()),
             key_fn,
             db_file_name,
@@ -171,7 +199,7 @@ impl<K, T> CacheDb<K, T>
             inserts_count: 0,
         }
     }
-    async fn init_database(&mut self)  {
+    async fn init_database(&mut self) {
         let thread_id = thread::current().id();
 
         let client_options = ClientOptions::parse("mongodb://localhost:27017").await.unwrap();
@@ -181,19 +209,38 @@ impl<K, T> CacheDb<K, T>
         self.thread_dbc.insert(thread_id, collection);
     }
 
+    pub async fn drop_collection(&mut self) {
+        let mut collection =
+            self.thread_dbc.get_mut(&thread::current().id()).unwrap();
+        collection.value_mut().drop(None).await.unwrap();
+    }
 
+    pub async fn collection_req(&mut self, pipeline: Vec<Document> ) -> Cursor<Document> {
+        let mut collection =
+            self.thread_dbc.get_mut(&thread::current().id()).unwrap();
+        collection.value_mut().aggregate(pipeline, None).await.unwrap()
+    }
 
-    async fn db_insert(&self, wrap_item: &WrapItem<T> )  {
+    async fn flush(&mut self) {
+        println!("{:?}", self.map.len());
+        for x in self.map.iter() {
+            if x.value().write_counts > 0 {
+                self.db_update(&x).await;
+            }
+        }
+    }
+
+    async fn db_insert(&self, wrap_item: &mut WrapItem<T>) -> Bson {
         let collection =
             self.thread_dbc.get(&thread::current().id()).unwrap();
         let options = InsertOneOptions::builder()
             .write_concern(WriteConcern::builder().w(Acknowledgment::from(1)).build())
             .build();
         collection
-            .insert_one(wrap_item, options).await.expect("db_insert error");
+            .insert_one(wrap_item, options).await.expect("db_insert error").inserted_id
     }
 
-    async fn db_update(&self, wrap_item: &WrapItem<T> )  {
+    async fn db_update(&self, wrap_item: &WrapItem<T>) {
         let collection =
             self.thread_dbc.get(&thread::current().id()).unwrap();
         let item_bson: Document = to_document(&wrap_item).unwrap();
@@ -206,7 +253,10 @@ impl<K, T> CacheDb<K, T>
     pub async fn insert(&self, item: T) {
         let key = (self.key_fn)(&item);
         {
-            let val = self.map.get_mut(&key);
+            let val = {
+                let lock = self.map_mutex.lock().await;
+                self.map.get_mut(&key)
+            };
 
             if let Some(mut val) = val {
                 val.value_mut().repetitions += 1;
@@ -219,9 +269,10 @@ impl<K, T> CacheDb<K, T>
             }
         }
         let wrap_item = WrapItem::new(item);
-        self.db_insert(&wrap_item).await;
-        self.map.insert(key, wrap_item);
-
+        self.map.insert(key.clone(), wrap_item);
+        let mut val = self.map.get_mut(&key).unwrap();
+        val.id = self.db_insert(&mut val).await.as_object_id().unwrap();
+        // println!("{:?}", self.map.len());
 
 
         // let cut_size: i64 = self.map.len() as i64 - self.size_limit as i64;
