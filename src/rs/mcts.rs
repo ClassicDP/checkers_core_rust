@@ -14,6 +14,8 @@ use serde::Deserialize;
 use std::iter::Iterator;
 use std::mem;
 use std::sync::{Arc, Mutex, RwLock};
+use schemars::_private::NoSerialize;
+use crate::cache_db::CacheDb;
 
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -104,14 +106,18 @@ impl CacheItem {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct  Cache (pub Arc<RwLock<CacheMap<PositionKey, CacheItem>>>);
+#[derive(Clone, Debug)]
+pub struct  Cache (pub Arc<RwLock<Option<CacheDb<PositionKey, CacheItem>>>>);
 
-impl Default for Cache {
-    fn default() -> Self {
-        Cache(Arc::new(RwLock::new(CacheMap::new(None, 0))))
-    }
-}
+// impl Default for Cache {
+//     fn default() -> Self {
+//         Cache(Arc::new(RwLock::new(
+//                 CacheDb::new(CacheItem::key, "checkers".to_string(),
+//                              "nodes".to_string(),10_000_000,
+//                              10, 1000).await)
+//         ))
+//     }
+// }
 #[derive(Debug)]
 pub struct McTree {
     pub root: Rc<RefCell<Node>>,
@@ -137,7 +143,7 @@ impl McTree {
             history,
             cache:
             Cache(Arc::new(RwLock::new(
-                CacheMap::new(Some(CacheItem::key), 1_000_000)))),
+                None)))
         }
     }
 
@@ -263,12 +269,14 @@ impl McTree {
                                                                          Some(nn + x.borrow().NN))));
                             let cache_item = CacheItem {node: prev_pos_wn.clone(), child: position_wn};
                             let key = cache_item.key();
-                            let pos_wn = self.cache.0.read().unwrap().get(&key);
+                            let cache = self.cache.0.read().unwrap();
+                            let pos_wn = cache.as_ref().unwrap().get(&key);
                             if let Some(pos_wn) = &pos_wn {
+                                let pos_wn = pos_wn.get_item().read().unwrap();
                                 cached_passes += 1;
-                                x.borrow_mut().N = pos_wn.lock().unwrap().item.child.lock().unwrap().N;
-                                x.borrow_mut().W = pos_wn.lock().unwrap().item.child.lock().unwrap().W;
-                                x.borrow_mut().NN = pos_wn.lock().unwrap().item.child.lock().unwrap().NN.unwrap_or(0);
+                                x.borrow_mut().N = pos_wn.child.lock().unwrap().N;
+                                x.borrow_mut().W = pos_wn.child.lock().unwrap().W;
+                                x.borrow_mut().NN = pos_wn.child.lock().unwrap().NN.unwrap_or(0);
                             }
                         }
                     });
@@ -292,10 +300,11 @@ impl McTree {
                                                                  Some(nn + node.borrow().NN))));
                     let cache_item = CacheItem{node: prev_pos_wn.clone(), child: position_wn};
                     let key = cache_item.key();
-                    let ch_node = self.cache.0.read().unwrap().get(&key);
+                    let cache = self.cache.0.read().unwrap();
+                    let ch_node =  cache.as_ref().unwrap().get(&key);
                     if ch_node.is_none() || (node.borrow().N -
-                        ch_node.unwrap().lock().unwrap().item.child.lock().unwrap().N > 10) {
-                        self.cache.0.write().unwrap().insert(cache_item);
+                        ch_node.unwrap().get_item().read().unwrap().child.lock().unwrap().N > 10) {
+                        self.cache.0.write().unwrap().as_mut().unwrap().insert(cache_item);
                     }
                 }
                 node.borrow_mut().N -= 1;

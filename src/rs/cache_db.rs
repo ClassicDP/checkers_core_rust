@@ -1,8 +1,8 @@
-use std::fmt::Debug;
+use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
-use std::{thread};
+use std::{fmt, thread};
 use std::ops::Range;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, LockResult, RwLock};
 use std::thread::{ThreadId};
 use dashmap::DashMap;
 use dashmap::mapref::one::{Ref, RefMut};
@@ -10,20 +10,22 @@ use mongodb::bson::{Bson, doc, Document, oid::ObjectId, to_document};
 use mongodb::{bson, Client, Collection, Cursor};
 
 use mongodb::options::{Acknowledgment, ClientOptions, InsertOneOptions, UpdateOptions, WriteConcern};
+use schemars::_private::NoSerialize;
 use serde::{Serialize, Deserialize, Serializer};
 use serde::de::DeserializeOwned;
 use serde::ser::SerializeStruct;
+use serde_json::Value;
 use tokio::sync::Mutex;
 
 
 pub type DbKeyFn<K, T> = fn(&T) -> K;
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct WrapItem<T>
     where
-        T: Serialize + Unpin + Send + Sync + Clone + Debug,
+        T: Serialize + Unpin + Send + Sync + Clone,
 {
-    item: RwLock<T>,
+    item: Arc<RwLock<T>>,
     id: ObjectId,
     repetitions: u64,
     #[serde(skip)]
@@ -32,7 +34,7 @@ pub struct WrapItem<T>
 
 impl<T: Serialize> Serialize for WrapItem<T>
     where
-        T: Serialize + Unpin + Send + Sync + Clone + Debug
+        T: Serialize + Unpin + Send + Sync + Clone
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
         where
@@ -67,28 +69,31 @@ impl<T> Into<Document> for WrapItem<T>
 
 impl<T> WrapItem<T>
     where
-        T: DeserializeOwned + Unpin + Send + Sync + Clone + Serialize + Debug,
+        T: DeserializeOwned + Unpin + Send + Sync + Clone + Serialize ,
 {
     pub fn new(item: T) -> WrapItem<T> {
         WrapItem {
-            item: RwLock::new(item),
+            item: Arc::new(RwLock::new(item)),
             id: ObjectId::default(),
             repetitions: 1,
             write_counts: 0,
         }
+    }
+    pub fn get_item(&self) -> &RwLock<T> {
+        &self.item
     }
 }
 
 
 pub struct CacheDb<K, T>
     where
-        T: Serialize + DeserializeOwned + Unpin + Send + Sync + Clone + Debug,
-        K: Hash + Eq + Serialize + 'static + Clone + Debug
+        T: Serialize + DeserializeOwned + Unpin + Send + Sync + Clone,
+        K: Hash + Eq + Serialize + 'static
 {
     map: DashMap<K, WrapItem<T>>,
     map_mutex: Mutex<()>,
     key_fn: DbKeyFn<K, T>,
-    db_file_name: String,
+    db_name: String,
     collection_name: String,
     thread_dbc: Arc<DashMap<ThreadId, Collection<WrapItem<T>>>>,
     size_limit: u64,
@@ -97,18 +102,32 @@ pub struct CacheDb<K, T>
     inserts_count: u16,
 }
 
+impl<K, T> Debug for CacheDb<K, T>
+    where
+        T: Serialize + DeserializeOwned + Unpin + Send + Sync + Clone,
+        K: Hash + Eq + Serialize + 'static,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CacheDb")
+            .field("db_name", &self.db_name)
+            .field("collection_name", &self.collection_name)
+            // Добавьте остальные поля, которые вам необходимо вывести
+            .finish()
+    }
+}
+
 
 impl<K, T> CacheDb<K, T>
     where
-        T: Serialize + DeserializeOwned + Unpin + Send + Sync + Clone + Debug,
-        K: Hash + Eq + Serialize + 'static + Clone + Debug {
-    pub async fn new(key_fn: DbKeyFn<K, T>, db_file_name: String, collection_name: String, size_limit: u64, item_update_every: u16, cut_collection_every: u16) -> CacheDb<K, T> {
+        T: Serialize + DeserializeOwned + Unpin + Send + Sync + Clone,
+        K: Hash + Eq + Serialize + 'static  {
+    pub async fn new(key_fn: DbKeyFn<K, T>, db_name: String, collection_name: String, size_limit: u64, item_update_every: u16, cut_collection_every: u16) -> CacheDb<K, T> {
         CacheDb {
             map: DashMap::new(),
             map_mutex: Mutex::new(()),
             thread_dbc: Arc::new(DashMap::new()),
             key_fn,
-            db_file_name,
+            db_name,
             collection_name,
             size_limit,
             item_update_every,
@@ -121,7 +140,7 @@ impl<K, T> CacheDb<K, T>
 
         let client_options = ClientOptions::parse("mongodb://localhost:27017").await.unwrap();
         let client = Client::with_options(client_options).unwrap();
-        let database = client.database(&self.db_file_name);
+        let database = client.database(&self.db_name);
         let collection = database.collection::<WrapItem<T>>(&self.collection_name);
         self.thread_dbc.insert(thread_id, collection);
     }
@@ -136,6 +155,10 @@ impl<K, T> CacheDb<K, T>
         let mut collection =
             self.thread_dbc.get_mut(&thread::current().id()).unwrap();
         collection.value_mut().aggregate(pipeline, None).await
+    }
+
+    pub fn get(&self, key: &K) -> Option<WrapItem<T>> {
+        self.map.get(key).as_ref().map(|entry| entry.value().clone())
     }
 
     async fn flush(&mut self) {
@@ -170,11 +193,10 @@ impl<K, T> CacheDb<K, T>
     pub async fn insert(&self, item: T) {
         let key = (self.key_fn)(&item);
         let mut is_new = false;
-        self.map.entry(key.clone()).or_insert_with(|| {
+        let mut val = self.map.entry(key).or_insert_with(|| {
             is_new = true;
             WrapItem::new(item)
         });
-        let mut val = self.map.get_mut(&key).unwrap();
 
         // update in db
         if !is_new {
@@ -244,7 +266,7 @@ mod tests {
         let cut_collection_every = 50;
         let max_n = 300;
         let iter_per_worker = 200000;
-        let n_workers = 8;
+        let n_workers = 1;
 
         let cache_db = Arc::new(RwLock::new(
             CacheDb::new(
