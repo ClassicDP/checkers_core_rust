@@ -109,8 +109,8 @@ mod tests {
         let db_name = String::from("test");
         let size_limit = 200;
         let item_update_every = 100;
-        let cut_collection_every = 20;
-        let max_n = 1000;
+        let cut_collection_every = 50;
+        let max_n = 500;
         let iter_per_worker = 20000;
 
         let cache_db = Arc::new(RwLock::new(
@@ -147,7 +147,7 @@ mod tests {
         cache_db.write().unwrap().flush().await;
 
         let pipeline = vec![
-            doc!{
+            doc! {
             "$group": {
                 "_id": null,
                 "totalRepetitions": { "$sum": "$repetitions" }
@@ -155,12 +155,30 @@ mod tests {
         }
         ];
 
-        let doc = cache_db.write().unwrap().collection_req(pipeline).await.next().await;
+        let doc =
+            cache_db.write().unwrap().collection_req(pipeline).await.unwrap().next().await;
 
         let repetitions =
             doc.unwrap().unwrap().get("totalRepetitions").and_then(Bson::as_i64).unwrap();
         assert_eq!(repetitions, iter_per_worker * n_workers);
 
+        let pipeline = vec![
+            doc! {
+            "$count": "totalItems"
+        }];
+
+
+        let mut doc =
+            cache_db.write().unwrap().collection_req(pipeline).await.unwrap().next().await;
+
+        let x = {
+            let x = doc.as_mut().unwrap().as_mut().unwrap().get("totalItems").unwrap();
+            x
+        };
+        let total_items = x.clone().as_i32().unwrap();
+
+
+        assert_eq!(total_items as i64, max_n);
     }
 }
 
@@ -215,10 +233,10 @@ impl<K, T> CacheDb<K, T>
         collection.value_mut().drop(None).await.unwrap();
     }
 
-    pub async fn collection_req(&mut self, pipeline: Vec<Document> ) -> Cursor<Document> {
+    pub async fn collection_req(&mut self, pipeline: Vec<Document>) -> mongodb::error::Result<Cursor<Document>> {
         let mut collection =
             self.thread_dbc.get_mut(&thread::current().id()).unwrap();
-        collection.value_mut().aggregate(pipeline, None).await.unwrap()
+        collection.value_mut().aggregate(pipeline, None).await
     }
 
     async fn flush(&mut self) {
