@@ -271,7 +271,8 @@ impl McTree {
                         let cache = self.cache.0.read().unwrap();
                         let pos_wn = cache.as_ref().unwrap().get(&key);
                         if let Some(pos_wn) = &pos_wn {
-                            let pos_wn = pos_wn.get_item().read().unwrap();
+                            let item = pos_wn.get_item();
+                            let pos_wn = item.read().unwrap();
                             if x.borrow().N < pos_wn.child.lock().unwrap().N {
                                 cached_passes += 1;
                                 x.borrow_mut().N = pos_wn.child.lock().unwrap().N;
@@ -293,7 +294,7 @@ impl McTree {
                 };
 
 
-                // node.borrow_mut().N += 1;
+                node.borrow_mut().N += 1;
                 if node.borrow().N > 10 {
                     let position_wn =
                         Arc::new(Mutex::new(PositionWN::fom_node(&node.borrow(),
@@ -310,7 +311,7 @@ impl McTree {
                     //     self.cache.0.read().unwrap().as_ref().unwrap().insert(cache_item).await;
                     // }
                 }
-                // node.borrow_mut().N -= 1;
+                node.borrow_mut().N -= 1;
 
 
                 let hist_finish = self.history.borrow_mut().push_rc(node.borrow().pos_mov.clone());

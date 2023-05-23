@@ -76,10 +76,25 @@ impl<T> WrapItem<T>
             write_counts: 0,
         }
     }
-    pub fn get_item(&self) -> &RwLock<T> {
-        &self.item
+
+    pub fn from_arc_item(item: Arc<RwLock<T>>) -> WrapItem<T> {
+        WrapItem {
+            item,
+            id: ObjectId::default(),
+            repetitions: 1,
+            write_counts: 0,
+        }
     }
+    pub fn get_item(&self) -> Arc<RwLock<T>> {
+        self.item.clone()
+    }
+    pub fn set_item(&mut self, item:Arc<RwLock<T>> )  {
+        self.item = item;
+    }
+
 }
+
+
 
 
 pub struct CacheDb<K, T>
@@ -210,17 +225,19 @@ impl<K, T> CacheDb<K, T>
 
     pub async fn insert(&self, item: T) {
 
-        let key = (self.key_fn)(&item);
+        let item = Arc::new(RwLock::new(item));
+        let key = (self.key_fn)(&item.read().unwrap());
         let mut is_new = false;
         let mut val = self.map.entry(key).or_insert_with(|| {
             is_new = true;
-            WrapItem::new(item)
+            WrapItem::from_arc_item(item.clone())
         });
 
         // update in db
         if !is_new {
             val.value_mut().repetitions += 1;
             val.value_mut().write_counts += 1;
+            val.value_mut().set_item(item);
             if val.write_counts == self.item_update_every {
                 val.value_mut().write_counts = 0;
                 self.db_update(val.value()).await;
