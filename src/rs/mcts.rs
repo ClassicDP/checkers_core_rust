@@ -14,6 +14,7 @@ use serde::Deserialize;
 use std::iter::Iterator;
 use std::mem;
 use std::sync::{Arc, Mutex, RwLock};
+use mongodb::change_stream::event::OperationType::Drop;
 use schemars::_private::NoSerialize;
 use crate::cache_db::CacheDb;
 
@@ -37,7 +38,6 @@ impl PositionWN {
             next_move: node.pos_mov.borrow().pos.next_move.unwrap(),
         }
     }
-
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -90,10 +90,11 @@ impl Node {
         self.pos_mov.clone()
     }
 }
+
 #[derive(Serialize, Debug, Clone, Deserialize)]
 pub struct CacheItem {
     node: Arc<Mutex<PositionWN>>,
-    child: Arc<Mutex<PositionWN>>
+    child: Arc<Mutex<PositionWN>>,
 }
 
 impl CacheItem {
@@ -107,7 +108,7 @@ impl CacheItem {
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct  Cache (pub Arc<RwLock<Option<CacheDb<PositionKey, CacheItem>>>>);
+pub struct Cache(pub Arc<RwLock<Option<CacheDb<PositionKey, CacheItem>>>>);
 
 // impl Default for Cache {
 //     fn default() -> Self {
@@ -126,7 +127,6 @@ pub struct McTree {
 }
 
 
-
 impl McTree {
     pub fn new(pos: Position, history: Rc<RefCell<PositionHistory>>) -> McTree {
         McTree {
@@ -143,7 +143,7 @@ impl McTree {
             history,
             cache:
             Cache(Arc::new(RwLock::new(
-                None)))
+                None))),
         }
     }
 
@@ -156,7 +156,7 @@ impl McTree {
         McTree {
             root,
             history,
-            cache
+            cache,
         }
     }
 
@@ -267,7 +267,7 @@ impl McTree {
                             let position_wn =
                                 Arc::new(Mutex::new(PositionWN::fom_node(&x.borrow(),
                                                                          Some(nn + x.borrow().NN))));
-                            let cache_item = CacheItem {node: prev_pos_wn.clone(), child: position_wn};
+                            let cache_item = CacheItem { node: prev_pos_wn.clone(), child: position_wn };
                             let key = cache_item.key();
                             let cache = self.cache.0.read().unwrap();
                             let pos_wn = cache.as_ref().unwrap().get(&key);
@@ -298,10 +298,13 @@ impl McTree {
                     let position_wn =
                         Arc::new(Mutex::new(PositionWN::fom_node(&node.borrow(),
                                                                  Some(nn + node.borrow().NN))));
-                    let cache_item = CacheItem{node: prev_pos_wn.clone(), child: position_wn};
+                    let cache_item = CacheItem { node: prev_pos_wn.clone(), child: position_wn };
                     let key = cache_item.key();
-                    let cache = self.cache.0.read().unwrap();
-                    let ch_node =  cache.as_ref().unwrap().get(&key);
+
+                    let ch_node = {
+                        let cache = self.cache.0.read().unwrap();
+                        cache.as_ref().unwrap().get(&key)
+                    };
                     if ch_node.is_none() || (node.borrow().N -
                         ch_node.unwrap().get_item().read().unwrap().child.lock().unwrap().N > 1) {
                         self.cache.0.write().unwrap().as_mut().unwrap().insert(cache_item).await;
