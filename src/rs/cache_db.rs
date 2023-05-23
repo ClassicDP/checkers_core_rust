@@ -130,7 +130,7 @@ impl<K, T> CacheDb<K, T>
             inserts_count: 0,
         }
     }
-    async fn init_database(&mut self) {
+    pub async fn init_database(&mut self) {
         let thread_id = thread::current().id();
 
         let client_options = ClientOptions::parse("mongodb://localhost:27017").await.unwrap();
@@ -190,6 +190,7 @@ impl<K, T> CacheDb<K, T>
     async fn db_insert(&self, wrap_item: &mut WrapItem<T>) -> Bson {
         let collection =
             self.thread_dbc.get(&thread::current().id()).unwrap();
+
         let options = InsertOneOptions::builder()
             .write_concern(WriteConcern::builder().w(Acknowledgment::from(1)).build())
             .build();
@@ -208,6 +209,7 @@ impl<K, T> CacheDb<K, T>
     }
 
     pub async fn insert(&self, item: T) {
+
         let key = (self.key_fn)(&item);
         let mut is_new = false;
         let mut val = self.map.entry(key).or_insert_with(|| {

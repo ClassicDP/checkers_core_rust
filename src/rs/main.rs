@@ -1,4 +1,3 @@
-
 use std::collections::HashMap;
 use std::io;
 use std::io::Write;
@@ -20,8 +19,9 @@ include!("lib.rs");
 #[derive(Debug)]
 pub struct Score {
     m: i32,
-    d: i32
+    d: i32,
 }
+
 pub type ThreadScore = Arc<Mutex<Score>>;
 
 #[derive(Debug)]
@@ -73,16 +73,16 @@ pub fn init_test(game: &mut Game) {
     // game.current_position.next_move = Option::from(Color::White);
 }
 
-pub fn deep_mcts(mut cache: Cache, passes: i32, score: ThreadScore) {
+pub async fn deep_mcts(mut cache: Cache, passes: i32, score: ThreadScore) {
     let mut game = Game::new(8);
     let score_calc = |finish: &FinishType, neuron_start: bool| {
         if (*finish == BlackWin && !neuron_start) ||
             (*finish == WhiteWin) && neuron_start {
-            score.lock().unwrap().m +=1;
+            score.lock().unwrap().m += 1;
         };
         if (*finish == WhiteWin && !neuron_start) ||
             (*finish == BlackWin) && neuron_start {
-            score.lock().unwrap().d +=1;
+            score.lock().unwrap().d += 1;
         };
     };
     loop {
@@ -117,7 +117,7 @@ pub fn deep_mcts(mut cache: Cache, passes: i32, score: ThreadScore) {
                 break;
             };
             game.set_mcts_lim(passes);
-            game.find_mcts_and_make_best_move(true);
+            game.find_mcts_and_make_best_move(true).await;
 
             // println!("_");
             // game.set_depth(5);
@@ -129,7 +129,6 @@ pub fn deep_mcts(mut cache: Cache, passes: i32, score: ThreadScore) {
 
         cache = game.tree.as_mut().unwrap().cache.clone();
         game.tree = None;
-
     }
 }
 
@@ -229,30 +228,46 @@ pub fn random_game_test() {
     }
 }
 
-
-pub fn main() {
+#[tokio::main]
+pub async fn main() {
     let arg = std::env::args().collect::<Vec<_>>();
-    let mut threads_q: usize = 1;
+    let mut threads_q: usize = 8;
     let mut cache_size: usize = 10_000_000;
     let mut pass_q: usize = 5_000;
     println!("{:?}", arg);
-    let score: ThreadScore = Arc::new(Mutex::new(Score {d: 0, m: 0}));
-    let pos = arg.iter().position(|x|*x=="+++".to_string());
-    if pos.is_some() && arg.len() - pos.unwrap() ==4{
-
+    let score: ThreadScore = Arc::new(Mutex::new(Score { d: 0, m: 0 }));
+    let pos = arg.iter().position(|x| *x == "+++".to_string());
+    if pos.is_some() && arg.len() - pos.unwrap() == 4 {
         [threads_q, cache_size, pass_q] = <[usize; 3]>::try_from(
-            arg[pos.unwrap()+1..].iter().map(|x| x.parse().unwrap()).collect::<Vec<_>>()).unwrap();
+            arg[pos.unwrap() + 1..].iter().map(|x| x.parse().unwrap()).collect::<Vec<_>>()).unwrap();
         println!("set threads_q: {},  cache_size: {}, pass_q: {}", threads_q, cache_size, pass_q);
     }
     let runtime = Runtime::new().unwrap();
-    runtime.block_on(async {
-        let cache = Cache(Arc::new(RwLock::new(Some(CacheDb::new(
-            CacheItem::key, "checkers".to_string(),
-            "nodes".to_string(), cache_size as u64 ,
-            1, 1).await))));
-        Arc::new(vec![0;threads_q]).par_iter().for_each(|_|
-            deep_mcts(cache.clone(), pass_q as i32, score.clone()));
-    });
-
-
+    let cache_db = Cache(Arc::new(RwLock::new(Some(CacheDb::new(
+        CacheItem::key, "checkers".to_string(),
+        "nodes".to_string(), cache_size as u64,
+        100, 1).await))));
+    cache_db.0.write().unwrap().as_mut().unwrap().init_database().await;
+    cache_db.0.write().unwrap().as_mut().unwrap().read_collection().await;
+    let mut xx = vec![];
+    for _ in 0..threads_q {
+        let cache = cache_db.clone();
+        let score = score.clone();
+        let x = tokio::task::spawn_blocking(move || {
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap()
+                .block_on(async {
+                    cache.0.write().unwrap().as_mut().unwrap().init_database().await;
+                    deep_mcts(cache, pass_q as i32, score).await
+                })
+        });
+        xx.push(x);
+    }
+    for x in xx {
+        let y = x.await;
+    }
 }
+
+
