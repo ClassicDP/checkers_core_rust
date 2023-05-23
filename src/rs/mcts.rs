@@ -271,8 +271,7 @@ impl McTree {
                         let cache = self.cache.0.read().unwrap();
                         let pos_wn = cache.as_ref().unwrap().get(&key);
                         if let Some(pos_wn) = &pos_wn {
-                            let item = pos_wn.get_item();
-                            let pos_wn = item.read().unwrap();
+                            let pos_wn = pos_wn.read().unwrap();
                             if x.borrow().N < pos_wn.child.lock().unwrap().N {
                                 cached_passes += 1;
                                 x.borrow_mut().N = pos_wn.child.lock().unwrap().N;
