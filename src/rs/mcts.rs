@@ -293,24 +293,24 @@ impl McTree {
                 };
 
 
-                node.borrow_mut().N += 1;
+                // node.borrow_mut().N += 1;
                 if node.borrow().N > 10 {
                     let position_wn =
                         Arc::new(Mutex::new(PositionWN::fom_node(&node.borrow(),
                                                                  Some(nn + node.borrow().NN))));
                     let cache_item = CacheItem { node: prev_pos_wn.clone(), child: position_wn };
-                    let key = cache_item.key();
-
-                    let ch_node = {
-                        let cache = self.cache.0.read().unwrap();
-                        cache.as_ref().unwrap().get(&key)
-                    };
-                    if ch_node.is_none() || (node.borrow().N -
-                        ch_node.unwrap().get_item().read().unwrap().child.lock().unwrap().N > 1) {
-                        self.cache.0.read().unwrap().as_ref().unwrap().insert(cache_item).await;
-                    }
+                    // let key = cache_item.key();
+                    self.cache.0.read().unwrap().as_ref().unwrap().insert(cache_item).await;
+                    // let ch_node = {
+                    //     let cache = self.cache.0.read().unwrap();
+                    //     cache.as_ref().unwrap().get(&key)
+                    // };
+                    // if ch_node.is_none() || (node.borrow().N -
+                    //     ch_node.unwrap().get_item().read().unwrap().child.lock().unwrap().N > 1) {
+                    //     self.cache.0.read().unwrap().as_ref().unwrap().insert(cache_item).await;
+                    // }
                 }
-                node.borrow_mut().N -= 1;
+                // node.borrow_mut().N -= 1;
 
 
                 let hist_finish = self.history.borrow_mut().push_rc(node.borrow().pos_mov.clone());
