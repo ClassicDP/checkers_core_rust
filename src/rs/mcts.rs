@@ -278,6 +278,10 @@ impl McTree {
                                 x.borrow_mut().N = pos_wn.child.lock().unwrap().N;
                                 x.borrow_mut().W = pos_wn.child.lock().unwrap().W;
                                 x.borrow_mut().NN = pos_wn.child.lock().unwrap().NN.unwrap_or(0) - nn;
+                                let mut child = cache_item.child.lock().unwrap();
+                                child.N = x.borrow().N;
+                                child.W = x.borrow().W;
+                                child.NN = Option::from(x.borrow().NN);
                             }
                         }
                     });
