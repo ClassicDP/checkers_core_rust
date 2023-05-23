@@ -1,14 +1,18 @@
 use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
 use std::{fmt, thread};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Condvar, Mutex, RwLock};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread::{ThreadId};
 use async_std::prelude::StreamExt;
 use dashmap::DashMap;
+use std::sync::atomic::AtomicU32;
+use atomic_wait::{wait, wake_one, wake_all};
 use mongodb::bson::{Bson, doc, Document, oid::ObjectId, to_document};
 use mongodb::{bson, Client, Collection, Cursor};
+use mongodb::change_stream::event::OperationType::Drop;
 
-use mongodb::options::{Acknowledgment, ClientOptions, InsertOneOptions, UpdateOptions, WriteConcern};
+use mongodb::options::{Acknowledgment, ClientOptions, DeleteOptions, InsertOneOptions, UpdateOptions, WriteConcern};
 use serde::{Serialize, Deserialize, Serializer};
 use serde::de::DeserializeOwned;
 use serde::ser::SerializeStruct;
@@ -88,13 +92,10 @@ impl<T> WrapItem<T>
     pub fn get_item(&self) -> Arc<RwLock<T>> {
         self.item.clone()
     }
-    pub fn set_item(&mut self, item:Arc<RwLock<T>> )  {
+    pub fn set_item(&mut self, item: Arc<RwLock<T>>) {
         self.item = item;
     }
-
 }
-
-
 
 
 pub struct CacheDb<K, T>
@@ -103,6 +104,10 @@ pub struct CacheDb<K, T>
         K: Hash + Eq + Serialize + 'static
 {
     map: DashMap<K, WrapItem<T>>,
+    rw_counter: Mutex<u32>,
+    rw_finished: Condvar,
+    delete_counter: Mutex<u32>,
+    delete_finished: Condvar,
     key_fn: DbKeyFn<K, T>,
     db_name: String,
     collection_name: String,
@@ -110,7 +115,7 @@ pub struct CacheDb<K, T>
     size_limit: u64,
     item_update_every: u16,
     cut_collection_every: u16,
-    inserts_count: u16,
+    inserts_count: Mutex<u64>,
 }
 
 impl<K, T> Debug for CacheDb<K, T>
@@ -136,13 +141,17 @@ impl<K, T> CacheDb<K, T>
         CacheDb {
             map: DashMap::new(),
             thread_dbc: Arc::new(DashMap::new()),
+            rw_counter: Mutex::new(0),
+            rw_finished: Condvar::new(),
+            delete_counter: Mutex::new(0),
+            delete_finished: Condvar::new(),
             key_fn,
             db_name,
             collection_name,
             size_limit,
             item_update_every,
             cut_collection_every,
-            inserts_count: 0,
+            inserts_count: Mutex::new(0),
         }
     }
     pub async fn init_database(&mut self) {
@@ -189,8 +198,16 @@ impl<K, T> CacheDb<K, T>
         collection.value_mut().aggregate(pipeline, None).await
     }
 
-    pub fn get(&self, key: &K) -> Option<WrapItem<T>> {
-        self.map.get(key).as_ref().map(|entry| entry.value().clone())
+    pub fn get(&self, key: &K) -> Option<Arc<RwLock<T>>> {
+        let mut counter = self.delete_counter.lock().unwrap();
+        while *counter > 0 {
+            counter = self.delete_finished.wait(self.delete_counter.lock().unwrap()).unwrap();
+        }
+        drop(counter);
+        *self.rw_counter.lock().unwrap() += 1;
+        let item = self.map.get(key).as_ref().map(|entry| entry.value().item.clone());
+        *self.rw_counter.lock().unwrap() -= 1;
+        item
     }
 
     async fn flush(&mut self) {
@@ -223,15 +240,30 @@ impl<K, T> CacheDb<K, T>
         collection.update_one(filter, update, options).await.expect("db_update error");
     }
 
-    pub async fn insert(&self, item: T) {
+    async fn db_cut(&self, cut_range: u32) {
+        let collection =
+            self.thread_dbc.get(&thread::current().id()).unwrap();
+        let filter = doc! { "repetitions": {"$lt": cut_range } };
+        collection.delete_many(filter, DeleteOptions::default()).await.unwrap();
+    }
 
+    pub async fn insert(&self, item: T) {
+        let mut counter = self.delete_counter.lock().unwrap();
+        while *counter > 0 {
+            counter = self.delete_finished.wait(self.delete_counter.lock().unwrap()).unwrap();
+        }
+        drop(counter);
+        *self.rw_counter.lock().unwrap() += 1;
         let item = Arc::new(RwLock::new(item));
         let key = (self.key_fn)(&item.read().unwrap());
         let mut is_new = false;
         let mut val = self.map.entry(key).or_insert_with(|| {
+            let mut count = self.inserts_count.lock().unwrap();
+            *count += 1;
             is_new = true;
             WrapItem::from_arc_item(item.clone())
         });
+
 
         // update in db
         if !is_new {
@@ -245,6 +277,32 @@ impl<K, T> CacheDb<K, T>
         } else {
             // insert to db
             val.id = self.db_insert(&mut val).await.as_object_id().unwrap();
+        }
+        drop(val);
+        *self.rw_counter.lock().unwrap() -= 1;
+        self.rw_finished.notify_one();
+
+        let mut count = self.inserts_count.lock().unwrap();
+        if *count >= self.cut_collection_every as u64 {
+            let mut counter = self.rw_counter.lock().unwrap();
+            while *counter > 0 {
+                counter = self.rw_finished.wait(self.rw_counter.lock().unwrap()).unwrap();
+            }
+            drop(counter);
+            *self.delete_counter.lock().unwrap() += 1;
+
+            println!("start cutting..");
+            let sum_rep: u64 =
+                self.map.iter().map(|x| x.repetitions).sum();
+            if sum_rep > 0 {
+                let cut_range = sum_rep / self.map.len() as u64 / 10;
+                self.map.retain(|key, value| value.repetitions >= cut_range);
+                self.db_cut(cut_range as u32).await;
+                println!("db cut for: {:?}", cut_range);
+            }
+            *count = 0;
+            *self.delete_counter.lock().unwrap() -= 1;
+            self.delete_finished.notify_all();
         }
 
 

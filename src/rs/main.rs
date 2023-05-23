@@ -232,9 +232,9 @@ pub fn random_game_test() {
 pub async fn main() {
     let arg = std::env::args().collect::<Vec<_>>();
     let mut depth = 6;
-    let mut threads_q: usize = 24;
+    let mut threads_q: usize = 4;
     let mut cache_size: usize = 10_000_000;
-    let mut pass_q: usize = 10_000;
+    let mut pass_q: usize = 5_000;
     println!("{:?}", arg);
     let score: ThreadScore = Arc::new(Mutex::new(Score { d: 0, m: 0 }));
     let pos = arg.iter().position(|x| *x == "+++".to_string());
@@ -246,7 +246,7 @@ pub async fn main() {
     let cache_db = Cache(Arc::new(RwLock::new(Some(CacheDb::new(
         CacheItem::key, "checkers".to_string(),
         "nodes".to_string(), cache_size as u64,
-        100, 1).await))));
+        100, 1000).await))));
     cache_db.0.write().unwrap().as_mut().unwrap().init_database().await;
     cache_db.0.write().unwrap().as_mut().unwrap().read_collection().await;
     let mut xx = vec![];
