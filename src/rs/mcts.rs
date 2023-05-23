@@ -263,16 +263,16 @@ impl McTree {
                 )));
                 node = {
                     childs.iter().for_each(|x| {
-                        if x.borrow().N == 0 {
-                            let position_wn =
-                                Arc::new(Mutex::new(PositionWN::fom_node(&x.borrow(),
-                                                                         Some(nn + x.borrow().NN))));
-                            let cache_item = CacheItem { node: prev_pos_wn.clone(), child: position_wn };
-                            let key = cache_item.key();
-                            let cache = self.cache.0.read().unwrap();
-                            let pos_wn = cache.as_ref().unwrap().get(&key);
-                            if let Some(pos_wn) = &pos_wn {
-                                let pos_wn = pos_wn.get_item().read().unwrap();
+                        let position_wn =
+                            Arc::new(Mutex::new(PositionWN::fom_node(&x.borrow(),
+                                                                     Some(nn + x.borrow().NN))));
+                        let cache_item = CacheItem { node: prev_pos_wn.clone(), child: position_wn };
+                        let key = cache_item.key();
+                        let cache = self.cache.0.read().unwrap();
+                        let pos_wn = cache.as_ref().unwrap().get(&key);
+                        if let Some(pos_wn) = &pos_wn {
+                            let pos_wn = pos_wn.get_item().read().unwrap();
+                            if x.borrow().N < pos_wn.child.lock().unwrap().N {
                                 cached_passes += 1;
                                 x.borrow_mut().N = pos_wn.child.lock().unwrap().N;
                                 x.borrow_mut().W = pos_wn.child.lock().unwrap().W;
