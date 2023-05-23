@@ -307,7 +307,7 @@ impl McTree {
                     };
                     if ch_node.is_none() || (node.borrow().N -
                         ch_node.unwrap().get_item().read().unwrap().child.lock().unwrap().N > 10) {
-                        self.cache.0.write().unwrap().as_mut().unwrap().insert(cache_item).await;
+                        self.cache.0.read().unwrap().as_ref().unwrap().insert(cache_item).await;
                     }
                 }
                 node.borrow_mut().N -= 1;
