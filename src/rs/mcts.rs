@@ -306,7 +306,7 @@ impl McTree {
                         cache.as_ref().unwrap().get(&key)
                     };
                     if ch_node.is_none() || (node.borrow().N -
-                        ch_node.unwrap().get_item().read().unwrap().child.lock().unwrap().N > 10) {
+                        ch_node.unwrap().get_item().read().unwrap().child.lock().unwrap().N > 1) {
                         self.cache.0.read().unwrap().as_ref().unwrap().insert(cache_item).await;
                     }
                 }
