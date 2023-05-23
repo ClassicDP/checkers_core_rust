@@ -73,7 +73,7 @@ pub fn init_test(game: &mut Game) {
     // game.current_position.next_move = Option::from(Color::White);
 }
 
-pub async fn deep_mcts(mut cache: Cache, passes: i32, score: ThreadScore) {
+pub async fn deep_mcts(mut cache: Cache, passes: i32, depth: i16, score: ThreadScore) {
     let mut game = Game::new(8);
     let score_calc = |finish: &FinishType, neuron_start: bool| {
         if (*finish == BlackWin && !neuron_start) ||
@@ -104,7 +104,7 @@ pub async fn deep_mcts(mut cache: Cache, passes: i32, score: ThreadScore) {
                        neuron_start, finish, game.position_history.borrow().list.len(), score.lock().unwrap());
                 break;
             }
-            game.set_depth(3);
+            game.set_depth(depth);
             let best_move = game.get_best_move_rust();
             // print!("{:?}\n", best_move.get_move_item());
             io::stdout().flush().unwrap();
@@ -231,18 +231,18 @@ pub fn random_game_test() {
 #[tokio::main]
 pub async fn main() {
     let arg = std::env::args().collect::<Vec<_>>();
+    let mut depth = 6;
     let mut threads_q: usize = 24;
     let mut cache_size: usize = 10_000_000;
     let mut pass_q: usize = 10_000;
     println!("{:?}", arg);
     let score: ThreadScore = Arc::new(Mutex::new(Score { d: 0, m: 0 }));
     let pos = arg.iter().position(|x| *x == "+++".to_string());
-    if pos.is_some() && arg.len() - pos.unwrap() == 4 {
-        [threads_q, cache_size, pass_q] = <[usize; 3]>::try_from(
+    if pos.is_some() && arg.len() - pos.unwrap() == 5 {
+        [threads_q, cache_size, pass_q, depth] = <[usize; 4]>::try_from(
             arg[pos.unwrap() + 1..].iter().map(|x| x.parse().unwrap()).collect::<Vec<_>>()).unwrap();
-        println!("set threads_q: {},  cache_size: {}, pass_q: {}", threads_q, cache_size, pass_q);
+        println!("set threads_q: {},  cache_size: {}, pass_q: {}, depth: {}", threads_q, cache_size, pass_q, depth);
     }
-    let runtime = Runtime::new().unwrap();
     let cache_db = Cache(Arc::new(RwLock::new(Some(CacheDb::new(
         CacheItem::key, "checkers".to_string(),
         "nodes".to_string(), cache_size as u64,
@@ -260,7 +260,7 @@ pub async fn main() {
                 .unwrap()
                 .block_on(async {
                     cache.0.write().unwrap().as_mut().unwrap().init_database().await;
-                    deep_mcts(cache, pass_q as i32, score).await
+                    deep_mcts(cache, pass_q as i32, depth as i16, score).await
                 })
         });
         xx.push(x);
