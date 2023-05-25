@@ -1,5 +1,3 @@
-#![feature(thread_id_value)]
-
 use std::collections::HashMap;
 use std::{io, thread};
 use std::io::Write;
@@ -123,8 +121,8 @@ pub async fn deep_mcts(mut cache: Cache, passes: i32, depth: i16, score: ThreadS
             game.set_mcts_lim(passes);
             game.find_mcts_and_make_best_move(true).await;
 
-            let tree_size = game.tree.as_ref().unwrap().root.borrow().N;
-            let thread_id = thread::current().id().as_u64();
+            // let tree_size = game.tree.as_ref().unwrap().root.borrow().N;
+            // let thread_id = thread::current().id().as_u64();
             // println!("tree num {} hase size {}", thread_id, tree_size);
 
             // println!("_");
@@ -240,10 +238,10 @@ pub fn random_game_test() {
 #[tokio::main]
 pub async fn main() {
     let arg = std::env::args().collect::<Vec<_>>();
-    let mut depth = 5;
+    let mut depth = 6;
     let mut threads_q: usize = 4;
     let mut cut_every: usize = 1000;
-    let mut pass_q: usize = 50_000;
+    let mut pass_q: usize = 100_000;
     println!("{:?}", arg);
     let score: ThreadScore = Arc::new(Mutex::new(Score { d: 0, m: 0 }));
     let pos = arg.iter().position(|x| *x == "+++".to_string());
