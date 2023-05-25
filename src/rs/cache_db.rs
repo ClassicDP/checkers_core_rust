@@ -271,7 +271,7 @@ impl<K, T> CacheDb<K, T>
             }
         } else {
             // insert to db
-            val.id = self.db_insert(&mut val).await.as_object_id().unwrap();
+            self.db_insert(&mut val).await.as_object_id().unwrap();
         }
         drop(val);
         drop(lock);

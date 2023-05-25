@@ -294,7 +294,7 @@ impl McTree {
 
 
                 node.borrow_mut().N += 1;
-                if node.borrow().N > 50 {
+                if node.borrow().N > 200 {
                     let position_wn =
                         Arc::new(Mutex::new(PositionWN::fom_node(&node.borrow(),
                                                                  Some(nn + node.borrow().NN))));
