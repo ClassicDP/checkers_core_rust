@@ -108,8 +108,6 @@ pub enum WaitWhile {
 type Counter = Arc<(Mutex<u32>, Condvar)>;
 
 
-
-
 pub struct CacheDb<K, T>
     where
         T: Serialize + DeserializeOwned + Unpin + Send + Sync + Clone,
@@ -180,9 +178,11 @@ impl<K, T> CacheDb<K, T>
         let collection = self.thread_dbc.get_mut(&thread::current().id()).unwrap();
         let mut cursor = collection.find(None, None).await.unwrap();
 
+        let mut n = 0;
         while let Some(result) = cursor.next().await {
             match result {
                 Ok(document) => {
+                    n += 1;
                     let item = document.item.read().unwrap().clone();
                     let key = (self.key_fn)(&item);
                     let mut wrap_item = WrapItem::new(item);
@@ -195,6 +195,7 @@ impl<K, T> CacheDb<K, T>
                 }
             }
         }
+        println!("docs db: {} map: {}", n, self.map.len());
     }
 
 
@@ -210,7 +211,7 @@ impl<K, T> CacheDb<K, T>
         item
     }
 
-    async fn flush(&mut self) {
+    async fn flush(&self) {
         println!("{:?}", self.map.len());
         for x in self.map.iter() {
             if x.value().write_counts > 0 {
@@ -280,6 +281,7 @@ impl<K, T> CacheDb<K, T>
         if *insert_count >= self.cut_collection_every as u64 {
             let lock = self.locker.write();
             println!("start cutting..");
+            self.flush().await;
             let sum_rep: u64 =
                 self.map.iter().map(|x| x.repetitions).sum();
             if sum_rep > 0 {
