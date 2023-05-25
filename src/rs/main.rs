@@ -11,6 +11,8 @@ use crate::mcts::{Cache, CacheItem, Node, PositionWN};
 use crate::piece::Piece;
 use rayon::prelude::*;
 use std::iter::Iterator;
+use std::ops::Deref;
+use schemars::_private::NoSerialize;
 use tokio::runtime::Runtime;
 use crate::cache_db::CacheDb;
 use crate::PositionHistory::FinishType;
@@ -94,7 +96,7 @@ pub async fn deep_mcts(mut cache: Cache, passes: i32, depth: i16, score: ThreadS
         let neuron_start = thread_rng().gen_range(0.0..2.0) > 1.0;
         if neuron_start {
             game.set_mcts_lim(passes);
-            game.find_mcts_and_make_best_move(true);
+            game.find_mcts_and_make_best_move(true).await;
         }
         loop {
             let finish = game.position_history.borrow_mut().finish_check();
@@ -210,19 +212,20 @@ pub fn random_game_test() {
         while game.position_history.borrow_mut().finish_check().is_none() {
             // print!("state {}\n", game.state_());
             // print!("history {:?}\n", game.position_history.len());
-            if game.position_history.borrow().len() % 2 == 10 {
-                let moves_list = game.current_position.get_move_list_cached();
+            if game.position_history.borrow().len() % 2 == 1 {
+                let mut moves_list = game.current_position.get_move_list_cached();
                 let i = thread_rng().gen_range(0..moves_list.as_ref().as_ref().unwrap().list.len());
                 game.move_by_index_ts_n(i as i32);
-                // let ref mut random_move = moves_list.borrow_mut().list[i];
-                // game.make_move_by_move_item(random_move);
+                let ref mut random_move = moves_list.as_ref();
+                // game.make_move_by_move_item(&random_move.deref().unwrap().list[i]);
             } else {
                 let ref mut best_pos = game.get_best_move_rust();
                 game.make_move_by_pos_item(best_pos);
             }
         }
-        print!("end: {} {} {:?}\n", game_count, game.position_history.borrow().len(),
-               game.position_history.borrow_mut().finish_check());
+        let mut hist = game.position_history.borrow_mut();
+        print!("end: {} {} {:?}\n", game_count, hist.len(),
+               hist.finish_check());
         print!("state {}\n", game.state_());
         game_count += 1;
     }
@@ -231,8 +234,8 @@ pub fn random_game_test() {
 #[tokio::main]
 pub async fn main() {
     let arg = std::env::args().collect::<Vec<_>>();
-    let mut depth = 6;
-    let mut threads_q: usize = 4;
+    let mut depth = 2;
+    let mut threads_q: usize = 8;
     let mut cache_size: usize = 10_000_000;
     let mut pass_q: usize = 5_000;
     println!("{:?}", arg);
