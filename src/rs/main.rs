@@ -236,7 +236,7 @@ pub async fn main() {
     let arg = std::env::args().collect::<Vec<_>>();
     let mut depth = 2;
     let mut threads_q: usize = 8;
-    let mut cut_every: usize = 20_000;
+    let mut cut_every: usize = 1000;
     let mut pass_q: usize = 5_000;
     println!("{:?}", arg);
     let score: ThreadScore = Arc::new(Mutex::new(Score { d: 0, m: 0 }));
@@ -249,7 +249,7 @@ pub async fn main() {
     let cache_db = Cache(Arc::new(RwLock::new(Some(CacheDb::new(
         CacheItem::key, "checkers".to_string(),
         "nodes".to_string(), cut_every as u64,
-        100, cut_every as u16).await))));
+        1000, cut_every as u16).await))));
     cache_db.0.write().unwrap().as_mut().unwrap().init_database().await;
     cache_db.0.write().unwrap().as_mut().unwrap().read_collection().await;
     let mut xx = vec![];
