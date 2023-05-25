@@ -236,20 +236,20 @@ pub async fn main() {
     let arg = std::env::args().collect::<Vec<_>>();
     let mut depth = 2;
     let mut threads_q: usize = 8;
-    let mut cache_size: usize = 10_000_000;
+    let mut cut_every: usize = 20_000;
     let mut pass_q: usize = 5_000;
     println!("{:?}", arg);
     let score: ThreadScore = Arc::new(Mutex::new(Score { d: 0, m: 0 }));
     let pos = arg.iter().position(|x| *x == "+++".to_string());
     if pos.is_some() && arg.len() - pos.unwrap() == 5 {
-        [threads_q, cache_size, pass_q, depth] = <[usize; 4]>::try_from(
+        [threads_q, cut_every, pass_q, depth] = <[usize; 4]>::try_from(
             arg[pos.unwrap() + 1..].iter().map(|x| x.parse().unwrap()).collect::<Vec<_>>()).unwrap();
-        println!("set threads_q: {},  cache_size: {}, pass_q: {}, depth: {}", threads_q, cache_size, pass_q, depth);
+        println!("set threads_q: {},  cut_every: {}, pass_q: {}, depth: {}", threads_q, cut_every, pass_q, depth);
     }
     let cache_db = Cache(Arc::new(RwLock::new(Some(CacheDb::new(
         CacheItem::key, "checkers".to_string(),
-        "nodes".to_string(), cache_size as u64,
-        100, 1000).await))));
+        "nodes".to_string(), cut_every as u64,
+        100, cut_every as u16).await))));
     cache_db.0.write().unwrap().as_mut().unwrap().init_database().await;
     cache_db.0.write().unwrap().as_mut().unwrap().read_collection().await;
     let mut xx = vec![];
