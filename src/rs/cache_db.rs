@@ -285,7 +285,7 @@ impl<K, T> CacheDb<K, T>
             let sum_rep: u64 =
                 self.map.iter().map(|x| x.repetitions).sum();
             if sum_rep > 0 {
-                let cut_range = sum_rep / self.map.len() as u64 / 10;
+                let cut_range = sum_rep / self.map.len() as u64 / 20;
                 let mut del = self.map.len();
                 self.map.retain(|key, value| value.repetitions >= cut_range);
                 del -= self.map.len();
