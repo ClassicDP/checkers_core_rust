@@ -51,17 +51,14 @@ pub enum Method {
     Mix,
 }
 
-#[wasm_bindgen]
+
 pub struct Game {
-    #[wasm_bindgen(skip)]
     pub position_history: Rc<RefCell<PositionHistory>>,
     position_environment: Arc<PositionEnvironment>,
-    #[wasm_bindgen(skip)]
     pub current_position: Position,
     max_depth: i16,
     mcts_lim: i32,
     method: Method,
-    #[wasm_bindgen(skip)]
     pub tree: Option<McTree>,
 }
 
