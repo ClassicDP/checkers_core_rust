@@ -1,21 +1,23 @@
 use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
 use std::{fmt, thread};
-use std::sync::{Arc, Condvar, Mutex, RwLock};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::ops::Deref;
+use std::sync::{Arc, Condvar, Mutex, RwLock, MutexGuard, LockResult};
+use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
 use std::thread::{ThreadId};
 use async_std::prelude::StreamExt;
 use dashmap::DashMap;
-use std::sync::atomic::AtomicU32;
 use atomic_wait::{wait, wake_one, wake_all};
 use mongodb::bson::{Bson, doc, Document, oid::ObjectId, to_document};
 use mongodb::{bson, Client, Collection, Cursor};
-use mongodb::change_stream::event::OperationType::Drop;
+
 
 use mongodb::options::{Acknowledgment, ClientOptions, DeleteOptions, InsertOneOptions, UpdateOptions, WriteConcern};
+use schemars::_private::NoSerialize;
 use serde::{Serialize, Deserialize, Serializer};
 use serde::de::DeserializeOwned;
 use serde::ser::SerializeStruct;
+use crate::position_environment::Grade;
 
 
 pub type DbKeyFn<K, T> = fn(&T) -> K;
@@ -97,6 +99,15 @@ impl<T> WrapItem<T>
     }
 }
 
+pub enum WaitWhile {
+    Del = 1,
+    Rw = 2,
+}
+
+type Counter = Arc<(Mutex<u32>, Condvar)>;
+
+
+
 
 pub struct CacheDb<K, T>
     where
@@ -104,14 +115,11 @@ pub struct CacheDb<K, T>
         K: Hash + Eq + Serialize + 'static
 {
     map: DashMap<K, WrapItem<T>>,
-    rw_counter: Mutex<u32>,
-    rw_finished: Condvar,
-    delete_counter: Mutex<u32>,
-    delete_finished: Condvar,
+    locker: RwLock<bool>,
     key_fn: DbKeyFn<K, T>,
     db_name: String,
     collection_name: String,
-    thread_dbc: Arc<DashMap<ThreadId, Collection<WrapItem<T>>>>,
+    thread_dbc: DashMap<ThreadId, Collection<WrapItem<T>>>,
     size_limit: u64,
     item_update_every: u16,
     cut_collection_every: u16,
@@ -140,11 +148,8 @@ impl<K, T> CacheDb<K, T>
     pub async fn new(key_fn: DbKeyFn<K, T>, db_name: String, collection_name: String, size_limit: u64, item_update_every: u16, cut_collection_every: u16) -> CacheDb<K, T> {
         CacheDb {
             map: DashMap::new(),
-            thread_dbc: Arc::new(DashMap::new()),
-            rw_counter: Mutex::new(0),
-            rw_finished: Condvar::new(),
-            delete_counter: Mutex::new(0),
-            delete_finished: Condvar::new(),
+            thread_dbc: DashMap::new(),
+            locker: RwLock::new(false),
             key_fn,
             db_name,
             collection_name,
@@ -199,14 +204,8 @@ impl<K, T> CacheDb<K, T>
     }
 
     pub fn get(&self, key: &K) -> Option<Arc<RwLock<T>>> {
-        let mut counter = self.delete_counter.lock().unwrap();
-        while *counter > 0 {
-            counter = self.delete_finished.wait(self.delete_counter.lock().unwrap()).unwrap();
-        }
-        drop(counter);
-        *self.rw_counter.lock().unwrap() += 1;
-        let item = self.map.get(key).as_ref().map(|entry| entry.value().item.clone());
-        *self.rw_counter.lock().unwrap() -= 1;
+        let locker = self.locker.read();
+        let item = self.map.get(key).as_ref().map(|entry| entry.value().item.clone()).clone();
         item
     }
 
@@ -248,12 +247,7 @@ impl<K, T> CacheDb<K, T>
     }
 
     pub async fn insert(&self, item: T) {
-        let mut counter = self.delete_counter.lock().unwrap();
-        while *counter > 0 {
-            counter = self.delete_finished.wait(self.delete_counter.lock().unwrap()).unwrap();
-        }
-        drop(counter);
-        *self.rw_counter.lock().unwrap() += 1;
+        let lock = self.locker.read();
         let item = Arc::new(RwLock::new(item));
         let key = (self.key_fn)(&item.read().unwrap());
         let mut is_new = false;
@@ -279,18 +273,11 @@ impl<K, T> CacheDb<K, T>
             val.id = self.db_insert(&mut val).await.as_object_id().unwrap();
         }
         drop(val);
-        *self.rw_counter.lock().unwrap() -= 1;
-        self.rw_finished.notify_one();
+        drop(lock);
 
-        let mut count = self.inserts_count.lock().unwrap();
-        if *count >= self.cut_collection_every as u64 {
-            let mut counter = self.rw_counter.lock().unwrap();
-            while *counter > 0 {
-                counter = self.rw_finished.wait(self.rw_counter.lock().unwrap()).unwrap();
-            }
-            drop(counter);
-            *self.delete_counter.lock().unwrap() += 1;
-
+        let mut insert_count = self.inserts_count.lock().unwrap();
+        if *insert_count >= self.cut_collection_every as u64 {
+            let lock = self.locker.write();
             println!("start cutting..");
             let sum_rep: u64 =
                 self.map.iter().map(|x| x.repetitions).sum();
@@ -300,9 +287,8 @@ impl<K, T> CacheDb<K, T>
                 self.db_cut(cut_range as u32).await;
                 println!("db cut for: {:?}", cut_range);
             }
-            *count = 0;
-            *self.delete_counter.lock().unwrap() -= 1;
-            self.delete_finished.notify_all();
+            *insert_count = 0;
+            drop(lock);
         }
 
 
@@ -349,6 +335,7 @@ mod tests {
             }
         }
     }
+
 
     #[tokio::test]
     async fn cache() {
