@@ -87,6 +87,7 @@ pub async fn deep_mcts(mut cache: Cache, passes: i32, depth: i16, score: ThreadS
             score.lock().unwrap().d += 1;
         };
     };
+    let mut prev_tree_size = 0;
     loop {
         init(&mut game);
         game.init_tree();
@@ -121,8 +122,15 @@ pub async fn deep_mcts(mut cache: Cache, passes: i32, depth: i16, score: ThreadS
             game.set_mcts_lim(passes);
             game.find_mcts_and_make_best_move(true).await;
 
-            // let tree_size = game.tree.as_ref().unwrap().root.borrow().N;
-            // let thread_id = thread::current().id().as_u64();
+            let tree_size = game.tree.as_ref().unwrap().root.borrow().N;
+            let thread_id = thread::current().id();
+            let thread_id_str = format!("{:?}", thread_id);
+            let s= (tree_size + prev_tree_size) as f64;
+            if  s > 0.0 &&
+                f64::abs((tree_size as f64 - prev_tree_size as f64)/(s)) > 0.4 {
+                prev_tree_size = tree_size;
+                println!("tree num {} hase size {}", thread_id_str, tree_size);
+            }
             // println!("tree num {} hase size {}", thread_id, tree_size);
 
             // println!("_");
@@ -239,7 +247,7 @@ pub fn random_game_test() {
 pub async fn main() {
     let arg = std::env::args().collect::<Vec<_>>();
     let mut depth = 6;
-    let mut threads_q: usize = 4;
+    let mut threads_q: usize = 2;
     let mut cut_every: usize = 1000;
     let mut pass_q: usize = 100_000;
     println!("{:?}", arg);

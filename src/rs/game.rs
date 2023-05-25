@@ -345,8 +345,10 @@ impl Game {
         self.current_position = node.clone().borrow().pos_mov.borrow().pos.clone();
         self.position_history.borrow_mut().push_rc(
             node.clone().borrow().pos_mov.clone());
-        self.tree = Option::from(McTree::new_from_node(node.clone(), self.position_history.clone(),
-                                                       self.tree.as_mut().unwrap().cache.clone()));
+        let tree = Option::from(McTree::new_from_node(node.clone(), self.position_history.clone(),
+                                                      self.tree.as_mut().unwrap().cache.clone()));
+        drop(self.tree.take());
+        self.tree = tree;
     }
 
 
