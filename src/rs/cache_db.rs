@@ -13,6 +13,7 @@ use mongodb::{bson, Client, Collection, Cursor};
 
 
 use mongodb::options::{Acknowledgment, ClientOptions, DeleteOptions, InsertOneOptions, UpdateOptions, WriteConcern};
+use mongodb::results::DeleteResult;
 use schemars::_private::NoSerialize;
 use serde::{Serialize, Deserialize, Serializer};
 use serde::de::DeserializeOwned;
@@ -239,11 +240,11 @@ impl<K, T> CacheDb<K, T>
         collection.update_one(filter, update, options).await.expect("db_update error");
     }
 
-    async fn db_cut(&self, cut_range: u32) {
+    async fn db_cut(&self, cut_range: u32) -> mongodb::error::Result<DeleteResult> {
         let collection =
             self.thread_dbc.get(&thread::current().id()).unwrap();
         let filter = doc! { "repetitions": {"$lt": cut_range } };
-        collection.delete_many(filter, DeleteOptions::default()).await.unwrap();
+        collection.delete_many(filter, DeleteOptions::default()).await
     }
 
     pub async fn insert(&self, item: T) {
@@ -283,9 +284,16 @@ impl<K, T> CacheDb<K, T>
                 self.map.iter().map(|x| x.repetitions).sum();
             if sum_rep > 0 {
                 let cut_range = sum_rep / self.map.len() as u64 / 10;
+                let mut del = self.map.len();
                 self.map.retain(|key, value| value.repetitions >= cut_range);
-                self.db_cut(cut_range as u32).await;
-                println!("db cut for: {:?}", cut_range);
+                del -= self.map.len();
+                let res = self.db_cut(cut_range as u32).await;
+                let del_from_db = if let Ok(res) = res {
+                    res.deleted_count
+                } else {
+                    0
+                };
+                println!("db cut for: {:?} deleted from map: {}, db: {}", cut_range, del, del_from_db);
             }
             *insert_count = 0;
             drop(lock);
