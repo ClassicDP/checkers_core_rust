@@ -49,6 +49,6 @@ path = "./src/rs/main.rs"
 overflow-checks = true
 
 [profile.dev]
-opt-level = 3
+opt-level = 0
 debug = true
 

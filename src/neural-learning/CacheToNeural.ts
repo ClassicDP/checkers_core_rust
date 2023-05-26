@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+// @ts-ignore
 import * as JSONStream from "jsonstream";
 type Color =
     "Black"|
@@ -14,7 +15,7 @@ const readStream = fs.createReadStream('cache.json', 'utf8');
 const jsonParser = JSONStream.parse('v.*');
 
 // Обработка события "data" при поступлении данных
-jsonParser.on('data', (data) => {
+jsonParser.on('data', (data: { item: Vec; }) => {
     // Обработка каждого объекта данных по мере их получения
     // console.log(data);
     v!.push(data.item);
