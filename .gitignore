@@ -4,6 +4,7 @@
 /package-lock.json
 cache.json
 cache.json.bak
+/src/neural-learning/vectors.json
 
 # Logs
 logs
