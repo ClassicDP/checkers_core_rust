@@ -299,16 +299,16 @@ impl McTree {
                         Arc::new(Mutex::new(PositionWN::fom_node(&node.borrow(),
                                                                  Some(nn + node.borrow().NN))));
                     let cache_item = CacheItem { node: prev_pos_wn.clone(), child: position_wn };
-                    // let key = cache_item.key();
-                    self.cache.0.read().unwrap().as_ref().unwrap().insert(cache_item).await;
-                    // let ch_node = {
-                    //     let cache = self.cache.0.read().unwrap();
-                    //     cache.as_ref().unwrap().get(&key)
-                    // };
-                    // if ch_node.is_none() || (node.borrow().N -
-                    //     ch_node.unwrap().get_item().read().unwrap().child.lock().unwrap().N > 1) {
-                    //     self.cache.0.read().unwrap().as_ref().unwrap().insert(cache_item).await;
-                    // }
+                    let key = cache_item.key();
+                    // self.cache.0.read().unwrap().as_ref().unwrap().insert(cache_item).await;
+                    let ch_node = {
+                        let cache = self.cache.0.read().unwrap();
+                        cache.as_ref().unwrap().get(&key)
+                    };
+                    if ch_node.is_none() || (node.borrow().N -
+                        ch_node.unwrap().read().unwrap().child.lock().unwrap().N > 10) {
+                        self.cache.0.read().unwrap().as_ref().unwrap().insert(cache_item).await;
+                    }
                 }
                 node.borrow_mut().N -= 1;
 
@@ -342,14 +342,14 @@ impl McTree {
         }
         let node = self.root.clone();
         if self.root.borrow().childs.len() > 0 {
-            self.root.borrow().childs.iter().min_by(|a, b|
-                    if u(a.borrow().N, a.borrow().NN, &node) < u(b.borrow().N, b.borrow().NN, &node) {
-                        Ordering::Less
-                    } else {
-                        Ordering::Greater
-                    }
-                // if u_min(&a.borrow(), &self.root) <
-                //     u_min(&b.borrow(), &self.root) { Ordering::Less } else { Ordering::Greater }
+            self.root.borrow().childs.iter().max_by(|a, b|
+                    // if u(a.borrow().N, a.borrow().NN, &node) < u(b.borrow().N, b.borrow().NN, &node) {
+                    //     Ordering::Less
+                    // } else {
+                    //     Ordering::Greater
+                    // }
+                if u_min(&a.borrow(), &self.root) <
+                    u_min(&b.borrow(), &self.root) { Ordering::Less } else { Ordering::Greater }
             ).unwrap().clone()
         } else {
             panic!("no childs")

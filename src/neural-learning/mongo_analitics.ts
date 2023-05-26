@@ -27,7 +27,7 @@ interface NodesItem {
 }
 
 async function connectToMongo(): Promise<Db> {
-    const url = 'mongodb://172.29.200.251:27017';
+    const url = 'mongodb://localhost:27017';
     const client = new MongoClient(url);
 
 
