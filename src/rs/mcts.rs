@@ -299,16 +299,16 @@ impl McTree {
                         Arc::new(Mutex::new(PositionWN::fom_node(&node.borrow(),
                                                                  Some(nn + node.borrow().NN))));
                     let cache_item = CacheItem { node: prev_pos_wn.clone(), child: position_wn };
-                    let key = cache_item.key();
-                    // self.cache.0.read().unwrap().as_ref().unwrap().insert(cache_item).await;
-                    let ch_node = {
-                        let cache = self.cache.0.read().unwrap();
-                        cache.as_ref().unwrap().get(&key)
-                    };
-                    if ch_node.is_none() || (node.borrow().N -
-                        ch_node.unwrap().read().unwrap().child.lock().unwrap().N > 10) {
-                        self.cache.0.read().unwrap().as_ref().unwrap().insert(cache_item).await;
-                    }
+                    self.cache.0.read().unwrap().as_ref().unwrap().insert(cache_item).await;
+                    // let key = cache_item.key();
+                    // let ch_node = {
+                    //     let cache = self.cache.0.read().unwrap();
+                    //     cache.as_ref().unwrap().get(&key)
+                    // };
+                    // if ch_node.is_none() || (node.borrow().N -
+                    //     ch_node.unwrap().read().unwrap().child.lock().unwrap().N > 10) {
+                    //     self.cache.0.read().unwrap().as_ref().unwrap().insert(cache_item).await;
+                    // }
                 }
                 node.borrow_mut().N -= 1;
 
