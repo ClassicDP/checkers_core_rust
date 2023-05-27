@@ -1,24 +1,49 @@
-use std::cell::{RefCell};
+use std::cell::{Cell, RefCell};
 use std::cmp::Ordering;
 use std::rc::Rc;
-use crate::position::{Position, PositionKey};
+use crate::position::{Position, TuplePositionKey};
 use crate::PositionHistory::{FinishType, PositionAndMove, PositionHistory};
 use rand::{Rng};
 use serde::Serialize;
-use crate::cache_map::{CacheMap};
 use crate::color::Color;
 use crate::color::Color::{Black, White};
 use crate::moves_list::MoveItem;
 use crate::piece::Piece;
 use serde::Deserialize;
 use std::iter::Iterator;
-use std::mem;
-use std::ops::Deref;
 use std::sync::{Arc, Mutex, RwLock};
-use mongodb::change_stream::event::OperationType::Drop;
-use schemars::_private::NoSerialize;
 use crate::cache_db::CacheDb;
 
+
+#[derive(Serialize, PartialEq, Eq, Debug, Clone, Deserialize, Hash)]
+pub struct VectorPosition(Arc<Vec<i8>>);
+
+#[derive(Serialize, Debug, Clone, Deserialize)]
+pub struct PositionQuality {
+    pub W: i64,
+    pub N: i64,
+    pub NN: Option<i64>,
+}
+
+
+impl VectorPosition {
+    pub fn from_position(pos: &Position) -> VectorPosition {
+        VectorPosition::from_cells(&pos.cells, pos.next_move.unwrap())
+    }
+
+    pub fn from_cells(cells: &Vec<Option<Piece>>, next_move: Color) -> VectorPosition {
+        let mut v = vec![];
+        for x in cells {
+            if let Some(piece) = x {
+                let s = if piece.color == Color::Black { -1 } else { 1 };
+                let w = if piece.is_king { 3 } else { 1 };
+                v.push(s * w);
+            } else { v.push(0) }
+        }
+        v.push(if next_move == Black { -1 } else { 1 });
+        VectorPosition(Arc::new(v))
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PositionWN {
@@ -66,21 +91,11 @@ impl Node {
             childs: vec![],
         }
     }
-    pub fn childs_iter(&self) {
-
-    }
+    pub fn childs_iter(&self) {}
     pub fn expand(&mut self) {
         if self.childs.len() > 0 { return; }
         let mut base_p = self.pos_mov.borrow().pos.clone();
         let move_list = base_p.get_move_list_cached();
-        // let childs = Arc::new(Mutex::new(vec![]));
-        // move_list.as_ref().as_ref().unwrap().list.par_iter().for_each(|x| {
-        //     childs.lock().unwrap().push(base_p.clone().make_move_and_get_position(x))
-        // });
-        // let childs = childs.lock().unwrap().clone();
-        // for x in childs {
-        //     self.childs.push(Rc::new(RefCell::new(Node::new(x))))
-        // }
         for mov in &move_list.as_ref().as_ref().unwrap().list {
             self.childs.push(Rc::new(
                 RefCell::new(Node::new(base_p.make_move_and_get_position(mov)))));
@@ -96,23 +111,52 @@ impl Node {
 }
 
 #[derive(Serialize, Debug, Clone, Deserialize)]
+pub struct OldCacheItem {
+    pub node: Arc<Mutex<PositionWN>>,
+    pub child: Arc<Mutex<PositionWN>>,
+}
+
+#[derive(Serialize, Debug, Clone, Deserialize)]
 pub struct CacheItem {
-    node: Arc<Mutex<PositionWN>>,
-    child: Arc<Mutex<PositionWN>>,
+    v_node: Arc<VectorPosition>,
+    v_child: Arc<VectorPosition>,
+    quality: TupleQuality,
 }
 
 impl CacheItem {
-    pub fn key(&self) -> PositionKey {
-        let node = self.node.lock().unwrap();
-        let child = self.child.lock().unwrap();
-        PositionKey(
-            node.cells.clone(), Option::from(node.next_move),
-            child.cells.clone(), Option::from(child.next_move))
+    pub fn key(&self) -> TuplePositionKey {
+        TuplePositionKey(self.v_node.clone(), self.v_child.clone())
+    }
+
+    pub fn from_node_child(node: &Node, child: &Node) -> CacheItem {
+        let v_node = Arc::new(VectorPosition::from_position(&node.pos_mov.borrow().pos));
+        let v_child = Arc::new(VectorPosition::from_position(&child.pos_mov.borrow().pos));
+        let quality = TupleQuality {
+            child: PositionQuality { N: child.N, W: child.W, NN: Option::from(child.NN) },
+            node: PositionQuality { N: node.N, W: node.W, NN: None },
+        };
+        CacheItem { v_node, v_child, quality }
+    }
+
+    pub fn from_pos_wn(node: &PositionWN, child: &PositionWN) -> CacheItem {
+        let v_node = Arc::new(VectorPosition::from_cells(&node.cells, node.next_move));
+        let v_child = Arc::new(VectorPosition::from_cells(&child.cells, child.next_move));
+        let quality = TupleQuality {
+            child: PositionQuality { N: child.N, W: child.W, NN: child.NN },
+            node: PositionQuality { N: node.N, W: node.W, NN: None },
+        };
+        CacheItem { v_node, v_child, quality }
     }
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct Cache(pub Arc<RwLock<Option<CacheDb<PositionKey, CacheItem>>>>);
+#[derive(Clone, Deserialize, Serialize, Debug)]
+struct TupleQuality {
+    node: PositionQuality,
+    child: PositionQuality,
+}
+
+#[derive(Clone, Default)]
+pub struct Cache(pub Arc<RwLock<Option<CacheDb<TuplePositionKey, CacheItem>>>>);
 
 // impl Default for Cache {
 //     fn default() -> Self {
@@ -123,7 +167,7 @@ pub struct Cache(pub Arc<RwLock<Option<CacheDb<PositionKey, CacheItem>>>>);
 //         ))
 //     }
 // }
-#[derive(Debug)]
+
 pub struct McTree {
     pub root: Rc<RefCell<Node>>,
     history: Rc<RefCell<PositionHistory>>,
@@ -259,9 +303,7 @@ impl McTree {
             loop {
                 pass += 1;
                 let nn = node.borrow().N;
-                let prev_pos_wn = Arc::new((Mutex::new(
-                    PositionWN::fom_node(&node.borrow(), None)
-                )));
+                let parent_node = node.clone();
                 node = {
                     node.borrow_mut().N += 1;
                     node.borrow_mut().expand();
@@ -279,20 +321,16 @@ impl McTree {
                         let childs = &node.borrow().childs;
                         let childs_iter = childs.iter();
                         childs_iter.clone().for_each(|x| {
-                            let position_wn =
-                                Arc::new(Mutex::new(PositionWN::fom_node(&x.borrow(),
-                                                                         Some(nn + x.borrow().NN))));
-                            let cache_item = CacheItem { node: prev_pos_wn.clone(), child: position_wn };
+                            let cache_item = CacheItem::from_node_child(&*node.borrow(), &*x.borrow());
                             let key = cache_item.key();
                             let cache = self.cache.0.read().unwrap();
-                            let pos_wn = cache.as_ref().unwrap().get(&key);
-                            if let Some(pos_wn) = &pos_wn {
-                                let pos_wn = pos_wn.read().unwrap();
-                                if x.borrow().N < pos_wn.child.lock().unwrap().N {
+                            let quality_val = cache.as_ref().unwrap().get(&key);
+                            if let Some(quality) = &quality_val {
+                                if x.borrow().N < quality.read().unwrap().quality.child.N {
                                     cached_passes += 1;
-                                    x.borrow_mut().N = pos_wn.child.lock().unwrap().N;
-                                    x.borrow_mut().W = pos_wn.child.lock().unwrap().W;
-                                    x.borrow_mut().NN = pos_wn.child.lock().unwrap().NN.unwrap_or(0) - nn;
+                                    x.borrow_mut().N = quality.read().unwrap().quality.child.N;
+                                    x.borrow_mut().W = quality.read().unwrap().quality.child.W;
+                                    x.borrow_mut().NN = quality.read().unwrap().quality.child.NN.unwrap_or(0) - nn;
                                 }
                             }
                         });
@@ -306,18 +344,13 @@ impl McTree {
                             }).unwrap().clone();
                             node_max
                         }
-
-
                     }
                 };
 
 
                 node.borrow_mut().N += 1;
                 if node.borrow().N > 100 {
-                    let position_wn =
-                        Arc::new(Mutex::new(PositionWN::fom_node(&node.borrow(),
-                                                                 Some(nn + node.borrow().NN))));
-                    let cache_item = CacheItem { node: prev_pos_wn.clone(), child: position_wn };
+                    let cache_item = CacheItem::from_node_child(&*parent_node.borrow(), &*node.borrow());
                     self.cache.0.read().unwrap().as_ref().unwrap().insert(cache_item).await;
                     // let key = cache_item.key();
                     // let ch_node = {
@@ -362,11 +395,11 @@ impl McTree {
         let node = self.root.clone();
         if self.root.borrow().childs.len() > 0 {
             self.root.borrow().childs.iter().max_by(|a, b|
-                    // if u(a.borrow().N, a.borrow().NN, &node) < u(b.borrow().N, b.borrow().NN, &node) {
-                    //     Ordering::Less
-                    // } else {
-                    //     Ordering::Greater
-                    // }
+                // if u(a.borrow().N, a.borrow().NN, &node) < u(b.borrow().N, b.borrow().NN, &node) {
+                //     Ordering::Less
+                // } else {
+                //     Ordering::Greater
+                // }
                 if u_min(&a.borrow(), &self.root) <
                     u_min(&b.borrow(), &self.root) { Ordering::Less } else { Ordering::Greater }
             ).unwrap().clone()

@@ -7,11 +7,11 @@ use rayon::prelude::IntoParallelRefIterator;
 use crate::cache_map::CacheMap;
 use crate::color::Color;
 use crate::game::Game;
-use crate::mcts::{Cache, CacheItem, Node, PositionWN};
+use crate::mcts::{Cache, CacheItem, Node, OldCacheItem, PositionWN};
 use crate::piece::Piece;
 use rayon::prelude::*;
 use std::iter::Iterator;
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 use schemars::_private::NoSerialize;
 use tokio::runtime::Runtime;
 use crate::cache_db::CacheDb;
@@ -246,10 +246,10 @@ pub fn random_game_test() {
 #[tokio::main]
 pub async fn main() {
     let arg = std::env::args().collect::<Vec<_>>();
-    let mut depth = 6;
-    let mut threads_q: usize = 8;
+    let mut depth = 3;
+    let mut threads_q: usize = 5;
     let mut cut_every: usize = 10000;
-    let mut pass_q: usize = 50_000;
+    let mut pass_q: usize = 40_000;
     println!("{:?}", arg);
     let score: ThreadScore = Arc::new(Mutex::new(Score { d: 0, m: 0 }));
     let pos = arg.iter().position(|x| *x == "+++".to_string());
@@ -263,6 +263,9 @@ pub async fn main() {
         "nodes".to_string(), cut_every as u64,
         10000, cut_every as u16).await))));
     cache_db.0.write().unwrap().as_mut().unwrap().init_database().await;
+    // cache_db.0.write().unwrap().as_mut().unwrap().read_collection::<OldCacheItem>(Some(|x|{
+    //     CacheItem::from_pos_wn(&x.node.lock().unwrap().deref(), x.child.lock().unwrap().deref())
+    // })).await;
     cache_db.0.write().unwrap().as_mut().unwrap().read_collection().await;
     let mut xx = vec![];
     for _ in 0..threads_q {

@@ -13,6 +13,7 @@ use crate::moves_list::{MoveItem, MoveList, Strike};
 use crate::color::Color;
 use crate::piece::Piece;
 use ts_rs::*;
+use crate::mcts::VectorPosition;
 use crate::PositionHistory::PositionAndMove;
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
@@ -92,12 +93,10 @@ pub struct Position {
     pub took_pieces: Vec<Option<Piece>>,
 }
 
-#[derive(Hash, PartialEq, Serialize, Debug)]
-pub struct  PositionKey(pub Vec<Option<Piece>>, pub Option<Color>, pub Vec<Option<Piece>>, pub Option<Color>);
+#[derive(Hash, PartialEq,  Eq, Serialize, Debug)]
+pub struct TuplePositionKey(pub Arc<VectorPosition>, pub Arc<VectorPosition>);
 
-impl Eq for PositionKey {
 
-}
 
 
 impl PartialEq for Position {

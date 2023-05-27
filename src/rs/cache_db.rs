@@ -111,7 +111,7 @@ type Counter = Arc<(Mutex<u32>, Condvar)>;
 pub struct CacheDb<K, T>
     where
         T: Serialize + DeserializeOwned + Unpin + Send + Sync + Clone,
-        K: Hash + Eq + Serialize + 'static
+        K: Hash + PartialEq + Serialize + 'static
 {
     map: DashMap<K, WrapItem<T>>,
     locker: RwLock<bool>,
@@ -191,7 +191,7 @@ impl<K, T> CacheDb<K, T>
                     self.map.insert(key, wrap_item);
                 }
                 Err(e) => {
-                    panic!("Error in read collection")
+
                 }
             }
         }
@@ -342,6 +342,7 @@ mod tests {
     use serde_derive::{Deserialize, Serialize};
     use tokio::time::Instant;
     use crate::cache_db::{CacheDb, DbKeyFn};
+    use crate::mcts::OldCacheItem;
 
     #[derive(Debug, Deserialize, Serialize, Clone)]
     struct Test {
