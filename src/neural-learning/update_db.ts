@@ -62,37 +62,41 @@ async function updateItems() {
     const collection = database.collection('nodes');
 
     // Получение всех элементов старой коллекции
-    const oldItems: WrapItem[] = await collection.find().toArray();
+    const cursor  = await collection.find();
 
-    // Обновление каждого элемента
-    for (const oldItem of oldItems) {
-        const itemId = oldItem._id;
-        try {
-            const newItem: NewWrapItem = {
-                _id: oldItem._id,
-                item: {
-                    v_child: [...oldItem.item.child.cells.map(x =>
-                        (!x) ? 0 :
-                            (x.is_king ? 3 : 1) * (x.color == "White" ? 1 : -1)), oldItem.item.child.next_move == "White" ? 1 : -1],
-                    v_node: [...oldItem.item.node.cells.map(x =>
-                        (!x) ? 0 :
-                            (x.is_king ? 3 : 1) * (x.color == "White" ? 1 : -1)), oldItem.item.child.next_move == "White" ? 1 : -1],
-                    quality: {
-                        child: {N: oldItem.item.child.N, W: oldItem.item.child.W, NN: oldItem.item.child.NN},
+    while (await cursor.hasNext()) {
+        const oldItem: WrapItem = await cursor.next();
+        {
+            const itemId = oldItem._id;
+            try {
+                const newItem: NewWrapItem = {
+                    _id: oldItem._id,
+                    item: {
+                        v_child: [...oldItem.item.child.cells.map(x =>
+                            (!x) ? 0 :
+                                (x.is_king ? 3 : 1) * (x.color == "White" ? 1 : -1)), oldItem.item.child.next_move == "White" ? 1 : -1],
+                        v_node: [...oldItem.item.node.cells.map(x =>
+                            (!x) ? 0 :
+                                (x.is_king ? 3 : 1) * (x.color == "White" ? 1 : -1)), oldItem.item.child.next_move == "White" ? 1 : -1],
+                        quality: {
+                            child: {N: oldItem.item.child.N, W: oldItem.item.child.W, NN: oldItem.item.child.NN},
 
-                        node: {N: oldItem.item.node.N, W: oldItem.item.node.W, NN: null}
-                    }
-                }, repetitions: oldItem.repetitions
-            };
+                            node: {N: oldItem.item.node.N, W: oldItem.item.node.W, NN: null}
+                        }
+                    }, repetitions: oldItem.repetitions
+                };
 
-            // Запись нового элемента с тем же _id
-            const updateQuery = {_id: itemId};
-            const updateDoc = {$set: newItem};
-            await collection.updateOne(updateQuery, updateDoc);
-        } catch (err) {
+                // Запись нового элемента с тем же _id
+                const updateQuery = {_id: itemId};
+                const updateDoc = {$set: newItem};
+                await collection.updateOne(updateQuery, updateDoc);
+            } catch (err) {
+            }
+
         }
-
     }
+    // Обновление каждого элемента
+
     console.log("finished")
 
 }
