@@ -342,7 +342,7 @@ impl McTree {
         }
         let node = self.root.clone();
         if self.root.borrow().childs.len() > 0 {
-            self.root.borrow().childs.iter().max_by(|a, b|
+            self.root.borrow().childs.iter().min_by(|a, b|
                     if u(a.borrow().N, a.borrow().NN, &node) < u(b.borrow().N, b.borrow().NN, &node) {
                         Ordering::Less
                     } else {
