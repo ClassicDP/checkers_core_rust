@@ -234,7 +234,7 @@ impl McTree {
             {
                 // let n = node.borrow().childs.iter()
                 //     .fold(0, |acc, x| acc + x.borrow().N) as f64;
-                1.4 * f64::sqrt(f64::ln((node.borrow().N + NN) as f64) / (N as f64 + 1.0))
+                2.3 * f64::sqrt(f64::ln((node.borrow().N + NN) as f64) / (N as f64 + 1.0))
                 // 2.0 * f64::sqrt(
                 //     // node.borrow().childs.iter().fold(0, |acc, x|acc+x.borrow().N) as f64
                 //     node.borrow().N as f64
@@ -294,7 +294,7 @@ impl McTree {
 
 
                 node.borrow_mut().N += 1;
-                if node.borrow().N > 200 {
+                if node.borrow().N > 100 {
                     let position_wn =
                         Arc::new(Mutex::new(PositionWN::fom_node(&node.borrow(),
                                                                  Some(nn + node.borrow().NN))));
@@ -342,14 +342,14 @@ impl McTree {
         }
         let node = self.root.clone();
         if self.root.borrow().childs.len() > 0 {
-            self.root.borrow().childs.iter().min_by(|a, b|
-                    if u(a.borrow().N, a.borrow().NN, &node) < u(b.borrow().N, b.borrow().NN, &node) {
-                        Ordering::Less
-                    } else {
-                        Ordering::Greater
-                    }
-                // if u_min(&a.borrow(), &self.root) <
-                //     u_min(&b.borrow(), &self.root) { Ordering::Less } else { Ordering::Greater }
+            self.root.borrow().childs.iter().max_by(|a, b|
+                    // if u(a.borrow().N, a.borrow().NN, &node) < u(b.borrow().N, b.borrow().NN, &node) {
+                    //     Ordering::Less
+                    // } else {
+                    //     Ordering::Greater
+                    // }
+                if u_min(&a.borrow(), &self.root) <
+                    u_min(&b.borrow(), &self.root) { Ordering::Less } else { Ordering::Greater }
             ).unwrap().clone()
         } else {
             panic!("no childs")
