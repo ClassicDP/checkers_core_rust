@@ -59,7 +59,7 @@ async function updateItems() {
 
     await client.connect();
     const database = client.db('checkers');
-    const collection = database.collection('nodes_');
+    const collection = database.collection('nodes');
 
     // Получение всех элементов старой коллекции
     const oldItems: WrapItem[] = await collection.find().toArray();
