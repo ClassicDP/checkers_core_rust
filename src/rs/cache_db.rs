@@ -281,7 +281,6 @@ impl<K, T> CacheDb<K, T>
         if *insert_count >= self.cut_collection_every as u64 {
             let lock = self.locker.write();
             println!("start cutting..");
-            self.flush().await;
             let sum_rep: u64 =
                 self.map.iter().map(|x| x.repetitions).sum();
             if sum_rep > 0 {
@@ -289,6 +288,7 @@ impl<K, T> CacheDb<K, T>
                 let mut del = self.map.len();
                 self.map.retain(|key, value| value.repetitions >= cut_range);
                 del -= self.map.len();
+                self.flush().await;
                 let res = self.db_cut(cut_range as u32).await;
                 let del_from_db = if let Ok(res) = res {
                     res.deleted_count
