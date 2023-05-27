@@ -13,6 +13,7 @@ use crate::piece::Piece;
 use serde::Deserialize;
 use std::iter::Iterator;
 use std::mem;
+use std::ops::Deref;
 use std::sync::{Arc, Mutex, RwLock};
 use mongodb::change_stream::event::OperationType::Drop;
 use schemars::_private::NoSerialize;
@@ -64,6 +65,9 @@ impl Node {
             pos_mov: Rc::new(RefCell::new(pos_mov)),
             childs: vec![],
         }
+    }
+    pub fn childs_iter(&self) {
+
     }
     pub fn expand(&mut self) {
         if self.childs.len() > 0 { return; }
@@ -253,42 +257,57 @@ impl McTree {
         while pass < max_passes && self.root.borrow().finish.is_none() {
             let mut node = self.root.clone();
             loop {
-                node.borrow_mut().N += 1;
-                node.borrow_mut().expand();
-                let childs = node.borrow().childs.clone();
                 pass += 1;
                 let nn = node.borrow().N;
                 let prev_pos_wn = Arc::new((Mutex::new(
                     PositionWN::fom_node(&node.borrow(), None)
                 )));
                 node = {
-                    childs.iter().for_each(|x| {
-                        let position_wn =
-                            Arc::new(Mutex::new(PositionWN::fom_node(&x.borrow(),
-                                                                     Some(nn + x.borrow().NN))));
-                        let cache_item = CacheItem { node: prev_pos_wn.clone(), child: position_wn };
-                        let key = cache_item.key();
-                        let cache = self.cache.0.read().unwrap();
-                        let pos_wn = cache.as_ref().unwrap().get(&key);
-                        if let Some(pos_wn) = &pos_wn {
-                            let pos_wn = pos_wn.read().unwrap();
-                            if x.borrow().N < pos_wn.child.lock().unwrap().N {
-                                cached_passes += 1;
-                                x.borrow_mut().N = pos_wn.child.lock().unwrap().N;
-                                x.borrow_mut().W = pos_wn.child.lock().unwrap().W;
-                                x.borrow_mut().NN = pos_wn.child.lock().unwrap().NN.unwrap_or(0) - nn;
-                            }
-                        }
-                    });
-                    let z_ch: Vec<_> = childs.iter().filter(|x| x.borrow().N < 10).collect();
-                    if z_ch.len() > 0 {
-                        z_ch[rand::thread_rng().gen_range(0..z_ch.len())].clone()
+                    node.borrow_mut().N += 1;
+                    node.borrow_mut().expand();
+                    let mut pos_mov = node.borrow().pos_mov.borrow().clone();
+                    let move_list = pos_mov.pos.get_move_list_cached_random_sort();
+                    if node.borrow().childs.len() < move_list.as_ref().as_ref().unwrap().list.len() {
+                        let i = move_list.as_ref().as_ref().unwrap().list.len();
+                        let x = &move_list.as_ref().as_ref().unwrap().list[i];
+                        let child = Rc::new(
+                            RefCell::new(Node::new(
+                                node.borrow().pos_mov.borrow_mut().pos.make_move_and_get_position(x))));
+                        node.borrow_mut().childs.push(child.clone());
+                        child
                     } else {
-                        let node_max = childs.iter().max_by(|a, b| {
-                            if u_max(&*a.borrow(), &node) < u_max(&*b.borrow(), &node)
-                            { Ordering::Less } else { Ordering::Greater }
-                        }).unwrap().clone();
-                        node_max
+                        let childs = &node.borrow().childs;
+                        let childs_iter = childs.iter();
+                        childs_iter.clone().for_each(|x| {
+                            let position_wn =
+                                Arc::new(Mutex::new(PositionWN::fom_node(&x.borrow(),
+                                                                         Some(nn + x.borrow().NN))));
+                            let cache_item = CacheItem { node: prev_pos_wn.clone(), child: position_wn };
+                            let key = cache_item.key();
+                            let cache = self.cache.0.read().unwrap();
+                            let pos_wn = cache.as_ref().unwrap().get(&key);
+                            if let Some(pos_wn) = &pos_wn {
+                                let pos_wn = pos_wn.read().unwrap();
+                                if x.borrow().N < pos_wn.child.lock().unwrap().N {
+                                    cached_passes += 1;
+                                    x.borrow_mut().N = pos_wn.child.lock().unwrap().N;
+                                    x.borrow_mut().W = pos_wn.child.lock().unwrap().W;
+                                    x.borrow_mut().NN = pos_wn.child.lock().unwrap().NN.unwrap_or(0) - nn;
+                                }
+                            }
+                        });
+                        let z_ch: Vec<_> = childs_iter.clone().filter(|x| x.borrow().N < 10).collect();
+                        if z_ch.len() > 0 {
+                            z_ch[rand::thread_rng().gen_range(0..z_ch.len())].clone()
+                        } else {
+                            let node_max = childs_iter.max_by(|a, b| {
+                                if u_max(&*a.borrow(), &node) < u_max(&*b.borrow(), &node)
+                                { Ordering::Less } else { Ordering::Greater }
+                            }).unwrap().clone();
+                            node_max
+                        }
+
+
                     }
                 };
 

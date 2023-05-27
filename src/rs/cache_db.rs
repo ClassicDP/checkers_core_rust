@@ -241,6 +241,16 @@ impl<K, T> CacheDb<K, T>
         collection.update_one(filter, update, options).await.expect("db_update error");
     }
 
+    async fn db_update_many(&self, wrap_items: &[WrapItem<T>]) {
+        let collection =
+            self.thread_dbc.get(&thread::current().id()).unwrap();
+        let filter = doc! {"_id": {"$in": wrap_items.iter().map(|x| x.id).collect::<Vec<ObjectId>>()}};
+        let update = doc! { "$set": wrap_items.iter().map(|x| to_document(&x).unwrap()).collect::<Vec<_>>() };
+        let options = UpdateOptions::builder().upsert(false).build();
+        collection.update_many(filter, update, options).await.expect("db_update error");
+    }
+
+
     async fn db_cut(&self, cut_range: u32) -> mongodb::error::Result<DeleteResult> {
         let collection =
             self.thread_dbc.get(&thread::current().id()).unwrap();
@@ -266,7 +276,7 @@ impl<K, T> CacheDb<K, T>
             val.value_mut().repetitions += 1;
             val.value_mut().write_counts += 1;
             val.value_mut().set_item(item);
-            if val.write_counts == self.item_update_every {
+            if val.value().write_counts == self.item_update_every {
                 val.value_mut().write_counts = 0;
                 self.db_update(val.value()).await;
             }

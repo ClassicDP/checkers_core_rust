@@ -151,6 +151,15 @@ impl Position {
         }
         self.move_list.clone()
     }
+    pub fn get_move_list_cached_random_sort(&mut self) -> Arc<Option<MoveList>> {
+        if self.move_list.is_none() {
+            let mut move_li = self.get_move_list(false);
+            move_li.list.sort_by(|x, y|
+                if rand::thread_rng().gen_range(0.0..2.0) > 1.0 {Ordering::Greater} else { Ordering::Less });
+            self.move_list = Arc::new(Option::from(move_li));
+        }
+        self.move_list.clone()
+    }
 
     fn state_change(&mut self, piece: &Piece, sign: i32) {
         if piece.is_king {
