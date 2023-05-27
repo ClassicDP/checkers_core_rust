@@ -288,7 +288,9 @@ impl<K, T> CacheDb<K, T>
                 let mut del = self.map.len();
                 self.map.retain(|key, value| value.repetitions >= cut_range);
                 del -= self.map.len();
+                println!("flush..");
                 self.flush().await;
+                println!("cutting..");
                 let res = self.db_cut(cut_range as u32).await;
                 let del_from_db = if let Ok(res) = res {
                     res.deleted_count
