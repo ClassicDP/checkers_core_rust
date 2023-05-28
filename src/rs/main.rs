@@ -247,7 +247,7 @@ pub fn random_game_test() {
 pub async fn main() {
     let arg = std::env::args().collect::<Vec<_>>();
     let mut depth = 3;
-    let mut threads_q: usize = 5;
+    let mut threads_q: usize = 1;
     let mut cut_every: usize = 10000;
     let mut pass_q: usize = 40_000;
     println!("{:?}", arg);

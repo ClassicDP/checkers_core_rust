@@ -93,12 +93,14 @@ impl Node {
     }
     pub fn childs_iter(&self) {}
     pub fn expand(&mut self) {
-        if self.childs.len() > 0 { return; }
         let mut base_p = self.pos_mov.borrow().pos.clone();
         let move_list = base_p.get_move_list_cached();
         for mov in &move_list.as_ref().as_ref().unwrap().list {
-            self.childs.push(Rc::new(
-                RefCell::new(Node::new(base_p.make_move_and_get_position(mov)))));
+            let node = Rc::new(
+                RefCell::new(Node::new(base_p.make_move_and_get_position(mov))));
+            if self.childs.iter().find(|x| x.borrow().pos_mov.borrow().pos == node.borrow().pos_mov.borrow().pos).is_none() {
+                self.childs.push(node);
+            }
             base_p.unmake_move(mov);
         }
     }
@@ -298,36 +300,41 @@ impl McTree {
             child.W as f64 / (child.N as f64 + 1.0) - u(child.N, child.NN, node)
         };
         let w_n = |a: &Rc<RefCell<Node>>| a.borrow().W as f64 / (1.0 + a.borrow().N as f64);
+
+        let mut check_in_cache = |node: &Rc<RefCell<Node>>, child: &Rc<RefCell<Node>>, nn: i64| {
+            let cache_item = CacheItem::from_node_child(&*node.borrow(), &*child.borrow(), nn);
+            let key = cache_item.key();
+            let cache = self.cache.0.read().unwrap();
+            let item_val = cache.as_ref().unwrap().get(&key);
+            if let Some(item) = &item_val {
+                if child.borrow().N < item.read().unwrap().quality.child.N {
+                    cached_passes += 1;
+                    child.borrow_mut().N = item.read().unwrap().quality.child.N;
+                    child.borrow_mut().W = item.read().unwrap().quality.child.W;
+                    child.borrow_mut().NN = item.read().unwrap().quality.child.NN.unwrap_or(0) - nn;
+                }
+            }
+        };
+
         while pass < max_passes && self.root.borrow().finish.is_none() {
             let mut node = self.root.clone();
             loop {
                 pass += 1;
                 let nn = node.borrow().N;
                 let parent_node = node.clone();
+                node.borrow_mut().N += 1;
                 node = {
-                    node.borrow_mut().N += 1;
-                    node.borrow_mut().expand();
+                    // node.borrow_mut().expand();
                     let mut pos_mov = node.borrow().pos_mov.borrow().clone();
                     let move_list = pos_mov.pos.get_move_list_cached_random_sort();
                     if node.borrow().childs.len() < move_list.as_ref().as_ref().unwrap().list.len() {
-                        let i = move_list.as_ref().as_ref().unwrap().list.len();
+                        let i = node.borrow().childs.len();
                         let x = &move_list.as_ref().as_ref().unwrap().list[i];
                         let child = Rc::new(
                             RefCell::new(Node::new(
                                 node.borrow().pos_mov.borrow_mut().pos.make_move_and_get_position(x))));
                         node.borrow_mut().childs.push(child.clone());
-                        let cache_item = CacheItem::from_node_child(&*node.borrow(), &*child.borrow(), nn);
-                        let key = cache_item.key();
-                        let cache = self.cache.0.read().unwrap();
-                        let item_val = cache.as_ref().unwrap().get(&key);
-                        if let Some(item) = &item_val {
-                            if child.borrow().N < item.read().unwrap().quality.child.N {
-                                cached_passes += 1;
-                                child.borrow_mut().N = item.read().unwrap().quality.child.N;
-                                child.borrow_mut().W = item.read().unwrap().quality.child.W;
-                                child.borrow_mut().NN = item.read().unwrap().quality.child.NN.unwrap_or(0) - nn;
-                            }
-                        }
+                        node.borrow().pos_mov.borrow_mut().pos.unmake_move(x);
                         child
                     } else {
                         let childs = &node.borrow().childs;
@@ -344,6 +351,10 @@ impl McTree {
                         }
                     }
                 };
+
+                if node.borrow().N == 0 {
+                    check_in_cache(&parent_node, &node, nn);
+                }
 
 
                 node.borrow_mut().N += 1;
