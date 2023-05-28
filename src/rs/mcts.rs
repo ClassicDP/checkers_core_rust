@@ -128,11 +128,11 @@ impl CacheItem {
         TuplePositionKey(self.v_node.clone(), self.v_child.clone())
     }
 
-    pub fn from_node_child(node: &Node, child: &Node) -> CacheItem {
+    pub fn from_node_child(node: &Node, child: &Node, nn: i64) -> CacheItem {
         let v_node = Arc::new(VectorPosition::from_position(&node.pos_mov.borrow().pos));
         let v_child = Arc::new(VectorPosition::from_position(&child.pos_mov.borrow().pos));
         let quality = TupleQuality {
-            child: PositionQuality { N: child.N, W: child.W, NN: Option::from(child.NN) },
+            child: PositionQuality { N: child.N, W: child.W, NN: Option::from(nn + child.NN) },
             node: PositionQuality { N: node.N, W: node.W, NN: None },
         };
         CacheItem { v_node, v_child, quality }
@@ -316,24 +316,22 @@ impl McTree {
                             RefCell::new(Node::new(
                                 node.borrow().pos_mov.borrow_mut().pos.make_move_and_get_position(x))));
                         node.borrow_mut().childs.push(child.clone());
+                        let cache_item = CacheItem::from_node_child(&*node.borrow(), &*child.borrow(), nn);
+                        let key = cache_item.key();
+                        let cache = self.cache.0.read().unwrap();
+                        let item_val = cache.as_ref().unwrap().get(&key);
+                        if let Some(item) = &item_val {
+                            if child.borrow().N < item.read().unwrap().quality.child.N {
+                                cached_passes += 1;
+                                child.borrow_mut().N = item.read().unwrap().quality.child.N;
+                                child.borrow_mut().W = item.read().unwrap().quality.child.W;
+                                child.borrow_mut().NN = item.read().unwrap().quality.child.NN.unwrap_or(0) - nn;
+                            }
+                        }
                         child
                     } else {
                         let childs = &node.borrow().childs;
                         let childs_iter = childs.iter();
-                        childs_iter.clone().for_each(|x| {
-                            let cache_item = CacheItem::from_node_child(&*node.borrow(), &*x.borrow());
-                            let key = cache_item.key();
-                            let cache = self.cache.0.read().unwrap();
-                            let quality_val = cache.as_ref().unwrap().get(&key);
-                            if let Some(quality) = &quality_val {
-                                if x.borrow().N < quality.read().unwrap().quality.child.N {
-                                    cached_passes += 1;
-                                    x.borrow_mut().N = quality.read().unwrap().quality.child.N;
-                                    x.borrow_mut().W = quality.read().unwrap().quality.child.W;
-                                    x.borrow_mut().NN = quality.read().unwrap().quality.child.NN.unwrap_or(0) - nn;
-                                }
-                            }
-                        });
                         let z_ch: Vec<_> = childs_iter.clone().filter(|x| x.borrow().N < 10).collect();
                         if z_ch.len() > 0 {
                             z_ch[rand::thread_rng().gen_range(0..z_ch.len())].clone()
@@ -350,7 +348,7 @@ impl McTree {
 
                 node.borrow_mut().N += 1;
                 if node.borrow().N > 100 {
-                    let cache_item = CacheItem::from_node_child(&*parent_node.borrow(), &*node.borrow());
+                    let cache_item = CacheItem::from_node_child(&*parent_node.borrow(), &*node.borrow(), nn);
                     self.cache.0.read().unwrap().as_ref().unwrap().insert(cache_item).await;
                     // let key = cache_item.key();
                     // let ch_node = {
