@@ -136,7 +136,7 @@ impl CacheItem {
         let v_node = Arc::new(VectorPosition::from_position(&node.pos_mov.borrow().pos));
         let v_child = Arc::new(VectorPosition::from_position(&child.pos_mov.borrow().pos));
         let quality = TupleQuality {
-            child: PositionQuality { N: child.N, W: child.W, NN: Option::from(nn + child.NN) },
+            child: PositionQuality { N: child.N, W: child.W, NN: Option::from(nn + node.N) },
             node: PositionQuality { N: node.N, W: node.W, NN: None },
         };
         CacheItem { v_node, v_child, quality }
@@ -322,9 +322,9 @@ impl McTree {
             let mut node = self.root.clone();
             loop {
                 pass += 1;
-                let nn = node.borrow().N;
                 let parent_node = node.clone();
                 node.borrow_mut().N += 1;
+                let nn = node.borrow().N;
                 node = {
                     // node.borrow_mut().expand();
                     let mut pos_mov = node.borrow().pos_mov.borrow().clone();
