@@ -346,7 +346,7 @@ impl McTree {
                             z_ch[rand::thread_rng().gen_range(0..z_ch.len())].clone()
                         } else {
                             let node_max = childs_iter.max_by(|a, b| {
-                                if u_max(&*a.borrow(), &node) < u_max(&*b.borrow(), &node)
+                                if u_max(&*a.borrow(), &parent_node) < u_max(&*b.borrow(), &parent_node)
                                 { Ordering::Less } else { Ordering::Greater }
                             }).unwrap().clone();
                             node_max
@@ -405,14 +405,14 @@ impl McTree {
         }
         let node = self.root.clone();
         if self.root.borrow().childs.len() > 0 {
-            self.root.borrow().childs.iter().min_by(|a, b|
-                if u(a.borrow().N, a.borrow().NN, &node) < u(b.borrow().N, b.borrow().NN, &node) {
-                    Ordering::Less
-                } else {
-                    Ordering::Greater
-                }
-                // if u_min(&a.borrow(), &self.root) <
-                //     u_min(&b.borrow(), &self.root) { Ordering::Less } else { Ordering::Greater }
+            self.root.borrow().childs.iter().max_by(|a, b|
+                // if u(a.borrow().N, a.borrow().NN, &node) < u(b.borrow().N, b.borrow().NN, &node) {
+                //     Ordering::Less
+                // } else {
+                //     Ordering::Greater
+                // }
+                if u_min(&a.borrow(), &self.root) <
+                    u_min(&b.borrow(), &self.root) { Ordering::Less } else { Ordering::Greater }
             ).unwrap().clone()
         } else {
             panic!("no childs")
