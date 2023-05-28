@@ -129,7 +129,7 @@ pub async fn deep_mcts(mut cache: Cache, passes: i32, depth: i16, score: ThreadS
             if  s > 0.0 &&
                 f64::abs((tree_size as f64 - prev_tree_size as f64)/(s)) > 0.4 {
                 prev_tree_size = tree_size;
-                println!("tree num {} hase size {}", thread_id_str, tree_size);
+                // println!("tree num {} hase size {}", thread_id_str, tree_size);
             }
             // println!("tree num {} hase size {}", thread_id, tree_size);
 
@@ -246,10 +246,10 @@ pub fn random_game_test() {
 #[tokio::main]
 pub async fn main() {
     let arg = std::env::args().collect::<Vec<_>>();
-    let mut depth = 6;
-    let mut threads_q: usize = 3;
+    let mut depth = 5;
+    let mut threads_q: usize = 5;
     let mut cut_every: usize = 10000;
-    let mut pass_q: usize = 400_000;
+    let mut pass_q: usize = 300_000;
     println!("{:?}", arg);
     let score: ThreadScore = Arc::new(Mutex::new(Score { d: 0, m: 0 }));
     let pos = arg.iter().position(|x| *x == "+++".to_string());

@@ -6,7 +6,7 @@ use ts_rs::TS;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, PartialEq, Deserialize)]
 #[derive(TS)]
 #[ts(export)]
 #[ts(rename_all = "camelCase")]
@@ -16,7 +16,7 @@ pub struct Strike {
     pub king_move: bool,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[derive(TS)]
 #[ts(export)]
 #[wasm_bindgen]

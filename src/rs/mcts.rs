@@ -98,7 +98,9 @@ impl Node {
         for mov in &move_list.as_ref().as_ref().unwrap().list {
             let node = Rc::new(
                 RefCell::new(Node::new(base_p.make_move_and_get_position(mov))));
-            if self.childs.iter().find(|x| x.borrow().pos_mov.borrow().pos == node.borrow().pos_mov.borrow().pos).is_none() {
+            if self.childs.iter().find(|x|
+                x.borrow().pos_mov.borrow().pos == node.borrow().pos_mov.borrow().pos &&
+                    x.borrow().pos_mov.borrow().mov == node.borrow().pos_mov.borrow().mov).is_none() {
                 self.childs.push(node);
             }
             base_p.unmake_move(mov);

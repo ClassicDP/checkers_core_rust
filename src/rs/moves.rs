@@ -10,7 +10,7 @@ use wasm_bindgen::prelude::*;
 pub type BoardPos = usize;
 
 
-#[derive(Clone, Serialize, Deserialize, TS)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, TS)]
 #[wasm_bindgen]
 #[ts(export)]
 #[ts(rename_all = "camelCase")]
@@ -60,7 +60,7 @@ impl <'a> IntoIterator for &'a StraightStrike {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
 #[derive(Tsify)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 #[ts(export)]
