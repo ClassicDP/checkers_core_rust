@@ -22,7 +22,6 @@ pub struct VectorPosition(Arc<Vec<i8>>);
 pub struct PositionQuality {
     pub W: i64,
     pub N: i64,
-    pub NN: Option<i64>,
 }
 
 
@@ -70,7 +69,6 @@ impl PositionWN {
 pub struct Node {
     pub W: i64,
     pub N: i64,
-    pub NN: i64,
     pub average_game_len: f64,
     pub finish: Option<FinishType>,
     pub passed: bool,
@@ -83,7 +81,6 @@ impl Node {
         Node {
             W: 0,
             N: 0,
-            NN: 0,
             average_game_len: 0.0,
             finish: None,
             passed: false,
@@ -132,12 +129,12 @@ impl CacheItem {
         TuplePositionKey(self.v_node.clone(), self.v_child.clone())
     }
 
-    pub fn from_node_child(node: &Node, child: &Node, nn: i64) -> CacheItem {
+    pub fn from_node_child(node: &Node, child: &Node) -> CacheItem {
         let v_node = Arc::new(VectorPosition::from_position(&node.pos_mov.borrow().pos));
         let v_child = Arc::new(VectorPosition::from_position(&child.pos_mov.borrow().pos));
         let quality = TupleQuality {
-            child: PositionQuality { N: child.N, W: child.W, NN: Option::from(nn + node.N) },
-            node: PositionQuality { N: node.N, W: node.W, NN: None },
+            child: PositionQuality { N: child.N, W: child.W },
+            node: PositionQuality { N: node.N, W: node.W },
         };
         CacheItem { v_node, v_child, quality }
     }
@@ -146,8 +143,8 @@ impl CacheItem {
         let v_node = Arc::new(VectorPosition::from_cells(&node.cells, node.next_move));
         let v_child = Arc::new(VectorPosition::from_cells(&child.cells, child.next_move));
         let quality = TupleQuality {
-            child: PositionQuality { N: child.N, W: child.W, NN: child.NN },
-            node: PositionQuality { N: node.N, W: node.W, NN: None },
+            child: PositionQuality { N: child.N, W: child.W },
+            node: PositionQuality { N: node.N, W: node.W },
         };
         CacheItem { v_node, v_child, quality }
     }
@@ -185,7 +182,6 @@ impl McTree {
             root: Rc::new(RefCell::new(Node {
                 W: 0,
                 N: 0,
-                NN: 0,
                 average_game_len: 0.0,
                 finish: None,
                 passed: false,
@@ -282,11 +278,11 @@ impl McTree {
             *track = vec![];
         };
         let mut pass = 0;
-        let u = |N: i64, NN: i64, node: &Rc<RefCell<Node>>|
+        let u = |N: i64, node: &Rc<RefCell<Node>>|
             {
                 // let n = node.borrow().childs.iter()
                 //     .fold(0, |acc, x| acc + x.borrow().N) as f64;
-                1.4 * f64::sqrt(f64::ln((node.borrow().N + NN) as f64) / (N as f64 + 1.0))
+                1.4 * f64::sqrt(f64::ln((node.borrow().N) as f64) / (N as f64 + 1.0))
                 // 2.0 * f64::sqrt(
                 //     // node.borrow().childs.iter().fold(0, |acc, x|acc+x.borrow().N) as f64
                 //     node.borrow().N as f64
@@ -295,25 +291,30 @@ impl McTree {
                 //     10.0 * f64::sqrt(node.borrow().N as f64) / (N as f64 + 1.0);
             };
         let u_max = |child: &Node, node: &Rc<RefCell<Node>>| {
-            child.W as f64 / (child.N as f64 + 1.0) + u(child.N, child.NN, node)
+            child.W as f64 / (child.N as f64 + 1.0) + u(child.N, node)
         };
         let u_min = |child: &Node, node: &Rc<RefCell<Node>>| {
             // child.N as f64
-            child.W as f64 / (child.N as f64 + 1.0) - u(child.N, child.NN, node)
+            child.W as f64 / (child.N as f64 + 1.0) - u(child.N, node)
         };
         let w_n = |a: &Rc<RefCell<Node>>| a.borrow().W as f64 / (1.0 + a.borrow().N as f64);
 
         let mut check_in_cache = |node: &Rc<RefCell<Node>>, child: &Rc<RefCell<Node>>, nn: i64| {
-            let cache_item = CacheItem::from_node_child(&*node.borrow(), &*child.borrow(), nn);
+            let cache_item = CacheItem::from_node_child(&*node.borrow(), &*child.borrow());
             let key = cache_item.key();
             let cache = self.cache.0.read().unwrap();
             let item_val = cache.as_ref().unwrap().get(&key);
             if let Some(item) = &item_val {
-                if child.borrow().N < item.read().unwrap().quality.child.N {
-                    cached_passes += 1;
+                cached_passes += 1;
+                // if node.borrow_mut().N < item.read().unwrap().quality.node.N {
+                //     node.borrow_mut().N = item.read().unwrap().quality.node.N;
+                //     node.borrow_mut().W = item.read().unwrap().quality.node.W;
+                // }
+                if child.borrow_mut().N < item.read().unwrap().quality.child.N {
                     child.borrow_mut().N = item.read().unwrap().quality.child.N;
                     child.borrow_mut().W = item.read().unwrap().quality.child.W;
-                    child.borrow_mut().NN = item.read().unwrap().quality.child.NN.unwrap_or(0) - nn;
+                    node.borrow_mut().N += child.borrow().N;
+                    node.borrow_mut().W -= child.borrow().W;
                 }
             }
         };
@@ -341,7 +342,7 @@ impl McTree {
                     } else {
                         let childs = &node.borrow().childs;
                         let childs_iter = childs.iter();
-                        let z_ch: Vec<_> = childs_iter.clone().filter(|x| x.borrow().N < 10).collect();
+                        let z_ch: Vec<_> = childs_iter.clone().filter(|x| x.borrow().N < 1).collect();
                         if z_ch.len() > 0 {
                             z_ch[rand::thread_rng().gen_range(0..z_ch.len())].clone()
                         } else {
@@ -354,14 +355,12 @@ impl McTree {
                     }
                 };
 
-                if node.borrow().N == 0 {
-                    check_in_cache(&parent_node, &node, nn);
-                }
+                // check_in_cache(&parent_node, &node, nn);
 
 
                 node.borrow_mut().N += 1;
-                if node.borrow().N > 100 {
-                    let cache_item = CacheItem::from_node_child(&*parent_node.borrow(), &*node.borrow(), nn);
+                if node.borrow().N > 1000000 {
+                    let cache_item = CacheItem::from_node_child(&*parent_node.borrow(), &*node.borrow());
                     self.cache.0.read().unwrap().as_ref().unwrap().insert(cache_item).await;
                     // let key = cache_item.key();
                     // let ch_node = {
