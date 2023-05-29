@@ -200,60 +200,7 @@ impl Game {
         best_pos
     }
 
-    pub fn mix_method(&mut self, apply: bool) -> BestPos {
-        let mut best_move =
-            self.best_move(self.max_depth, i32::MIN / 2, i32::MAX / 2, 0, true);
-        let move_color = self.current_position.next_move.unwrap();
-        if best_move.pos_list.iter().any(|x| x.borrow().deep_eval.is_none()) {
-            print!("strange list: {:?}\n",
-                   best_move.pos_list.iter().map(|x| x.borrow().deep_eval).collect::<Vec<_>>());
-        }
-        best_move.pos_list.sort_by_key(|x|
-            x.borrow().deep_eval.unwrap());
 
-
-        if move_color == White {
-            best_move.pos_list.reverse();
-        }
-        let eval_max_min = best_move.pos_list.first().unwrap().borrow().deep_eval.unwrap();
-        print!("eval: {}\n", eval_max_min);
-        let mut pos_list = vec![];
-        for pos in best_move.pos_list.iter() {
-            let condition = i32::abs(eval_max_min - pos.borrow().deep_eval.unwrap()) > 5000;
-            if condition {
-                print!("break cond: {} {} {:?}\n", eval_max_min, pos.borrow().deep_eval.unwrap(), pos_list.len());
-                break;
-            }
-            pos_list.push(pos.clone());
-        }
-
-        self.preparing_tree();
-
-        self.tree.as_mut().unwrap().root.borrow_mut().childs = {
-            let mut ch_list = vec![];
-            for child in self.tree.as_ref().unwrap().root.borrow().childs.clone() {
-                if pos_list.iter().any(|x| x.borrow_mut().pos == child.borrow().pos_mov.borrow().pos)
-                { ch_list.push(child.clone()) }
-            }
-            ch_list
-        };
-        print!("ch: {}\n", self.tree.as_mut().unwrap().root.borrow_mut().childs.len());
-        self.find_mcts_and_make_best_move(false);
-
-        let node = self.tree.as_ref().unwrap().tree_childs().iter().max_by(|x, y|
-            x.borrow().W.cmp(&y.borrow().W)).unwrap().clone();
-
-
-        let best_move = BestPos {
-            pos: Option::from(node.borrow().pos_mov.clone()),
-            pos_list: vec![],
-            deep_eval: 0,
-        };
-        if apply {
-            self.apply_node_move(node);
-        }
-        best_move
-    }
 
     pub async fn get_or_apply_best_move(&mut self, apply: bool) -> JsValue {
         let finish = self.position_history.borrow_mut().finish_check();
@@ -276,7 +223,8 @@ impl Game {
                 BestPos { pos: best.pos_move, pos_list: vec![], deep_eval: 0 }
             }
             Method::Mix => {
-                self.mix_method(apply)
+                let best = self.find_mcts_and_make_best_move(apply).await;
+                BestPos { pos: best.pos_move, pos_list: vec![], deep_eval: 0 }
             }
         };
         match serde_wasm_bindgen::to_value(
@@ -435,7 +383,8 @@ impl Game {
             if apply {
                 // to boards list
                 let childs =
-                    if !apply { node.clone().borrow().childs.clone() } else { self.tree.as_mut().unwrap().tree_childs() };
+                    if !apply { node.clone().borrow().childs.clone().values().map(|x|x.clone()).collect::<Vec<_>>() }
+                    else { self.tree.as_mut().unwrap().tree_childs() };
                 // print!("to board list childs :{}\n", childs.len());
 
                 let mut n_max =

@@ -78,7 +78,7 @@ impl PosState {
 }
 
 
-#[derive(Serialize, Debug, Clone, Deserialize)]
+#[derive(Serialize, Debug, Deserialize)]
 #[derive(TS)]
 #[ts(export)]
 pub struct Position {
@@ -92,8 +92,23 @@ pub struct Position {
     pub environment: Arc<PositionEnvironment>,
     #[serde(skip_serializing)]
     pub took_pieces: Vec<Option<Piece>>,
+    key: Option<VectorPosition>
 }
 
+impl Clone for Position {
+    fn clone(&self) -> Self {
+        Position {
+            cells: self.cells.clone(),
+            state: self.state.clone(),
+            next_move: self.next_move.clone(),
+            move_list: self.move_list.clone(),
+            eval: self.eval.clone(),
+            environment: self.environment.clone(),
+            took_pieces: self.took_pieces.clone(),
+            key: None,
+        }
+    }
+}
 #[derive(Hash, PartialEq,  Eq, Serialize, Debug)]
 pub struct TuplePositionKey(pub Arc<VectorPosition>, pub Arc<VectorPosition>);
 
@@ -126,11 +141,19 @@ impl Position {
             move_list: Arc::new(None),
             eval: None,
             took_pieces: vec![],
+            key: None
         };
         pos.cells = Vec::new();
         let size = pos.environment.size;
         pos.cells.resize((size * size / 2) as usize, None);
         pos
+    }
+
+    pub fn get_key(&mut self) -> VectorPosition {
+        if self.key.is_none() {
+            self.key = Some(VectorPosition::from_position(&self))
+        }
+        self.key.as_mut().unwrap().clone()
     }
 
     pub fn print_pos(&self) {
