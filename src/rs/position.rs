@@ -5,6 +5,7 @@ use std::io::Write;
 use std::mem::swap;
 use std::sync::{Arc, Mutex};
 use rand::{Rng};
+use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
 use crate::position_environment::PositionEnvironment;
 use crate::vector::Vector;
@@ -153,8 +154,7 @@ impl Position {
     pub fn get_move_list_cached_random_sort(&mut self) -> Arc<Option<MoveList>> {
         if self.move_list.is_none() {
             let mut move_li = self.get_move_list(false);
-            move_li.list.sort_by(|x, y|
-                if rand::thread_rng().gen_range(0.0..2.0) > 1.0 {Ordering::Greater} else { Ordering::Less });
+            move_li.list.shuffle(&mut rand::thread_rng());
             self.move_list = Arc::new(Option::from(move_li));
         }
         self.move_list.clone()
