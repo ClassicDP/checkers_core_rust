@@ -295,6 +295,7 @@ impl McTree {
         };
         let u_min = |child: &Node, node: &Rc<RefCell<Node>>| {
             // child.N as f64
+            println!("{} {}", child.W as f64 / (child.N as f64 + 1.0), u(child.N, node));
             child.W as f64 / (child.N as f64 + 1.0) - u(child.N, node)
         };
         let w_n = |a: &Rc<RefCell<Node>>| a.borrow().W as f64 / (1.0 + a.borrow().N as f64);
@@ -391,8 +392,9 @@ impl McTree {
                                          let fr = if finish == FinishType::WhiteWin { 1 } else if
                                          finish == FinishType::BlackWin { -1 } else { 0 };
                                          let sing =
-                                             if node.borrow().pos_mov.borrow().pos.next_move.unwrap() == Color::White { -1 } else { 1 };
-                                         fr * sing
+                                             if track[0].borrow().pos_mov.borrow().pos.next_move == Some(White) { 1 } else { -1 };
+                                         let par = if track.len() % 2 == 0 { 1 } else { -1 };
+                                         fr * sing * par
                                      }, &mut track, &self.history, hist_len, &self.cache);
                     break;
                 }
@@ -403,6 +405,7 @@ impl McTree {
             panic!("finish achieved")
         }
         let node = self.root.clone();
+        println!("---------------");
         if self.root.borrow().childs.len() > 0 {
             self.root.borrow().childs.iter().max_by(|a, b|
                 // a.borrow().N.cmp(&b.borrow().N)
