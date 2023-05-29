@@ -283,6 +283,7 @@ impl McTree {
                 // let n = node.borrow().childs.iter()
                 //     .fold(0, |acc, x| acc + x.borrow().N) as f64;
                 1.4 * f64::sqrt(f64::ln((node.borrow().N) as f64) / (N as f64 + 1.0))
+                // 2.0*f64::powi(f64::sqrt(node.borrow().N as f64) / (N as f64 + 1.0), 2)
                 // 2.0 * f64::sqrt(
                 //     // node.borrow().childs.iter().fold(0, |acc, x|acc+x.borrow().N) as f64
                 //     node.borrow().N as f64
@@ -343,7 +344,7 @@ impl McTree {
                     } else {
                         let childs = &node.borrow().childs;
                         let childs_iter = childs.iter();
-                        let z_ch: Vec<_> = childs_iter.clone().filter(|x| x.borrow().N < 1).collect();
+                        let z_ch: Vec<_> = childs_iter.clone().filter(|x| x.borrow().N < 10).collect();
                         if z_ch.len() > 0 {
                             z_ch[rand::thread_rng().gen_range(0..z_ch.len())].clone()
                         } else {
