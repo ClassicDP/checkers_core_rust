@@ -380,13 +380,14 @@ impl McTree {
                 let hist_finish = self.history.borrow_mut().push_rc(node.borrow().pos_mov.clone());
                 track.push(node.clone());
                 // if finish achieved
-                if let Some(finish) = {
-                    if hist_finish.is_some() { hist_finish.clone() } else {
-                        if node.borrow().finish.is_some() { node.borrow().finish.clone() } else {
-                            None
-                        }
-                    }
-                } {
+                if let Some(finish) = hist_finish
+                    // {
+                    // if hist_finish.is_some() { hist_finish.clone() } else {
+                    //     if node.borrow().finish.is_some() { node.borrow().finish.clone() } else {
+                    //         None
+                    //     }
+                    // }
+                 {
                     node.borrow_mut().finish = Some(finish.clone());
                     node.borrow_mut().passed = true;
                     back_propagation({
