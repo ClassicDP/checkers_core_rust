@@ -389,12 +389,16 @@ impl McTree {
                     node.borrow_mut().finish = Some(finish.clone());
                     node.borrow_mut().passed = true;
                     back_propagation({
-                                         let fr = if finish == FinishType::WhiteWin { 1 } else if
-                                         finish == FinishType::BlackWin { -1 } else { 0 };
-                                         let sing =
-                                             if track[0].borrow().pos_mov.borrow().pos.next_move == Some(White) { 1 } else { -1 };
-                                         let par = if track.len() % 2 == 0 { 1 } else { -1 };
-                                         fr * sing * par
+                                         let fr = match finish {
+                                             FinishType::BlackWin => { 1 }
+                                             FinishType::WhiteWin => { 1 }
+                                             _ => { 0 }
+                                         };
+                                         // let first =
+                                         //     if track[0].borrow().pos_mov.borrow().pos.next_move == Some(White) { 1 } else { -1 };
+                                         let par =
+                                             if node.borrow().pos_mov.borrow().pos.next_move == Some(White) { -1 } else { 1 };
+                                         fr
                                      }, &mut track, &self.history, hist_len, &self.cache);
                     break;
                 }

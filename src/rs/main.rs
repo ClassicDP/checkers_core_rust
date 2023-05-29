@@ -96,8 +96,11 @@ pub async fn deep_mcts(mut cache: Cache, passes: i32, depth: i16, score: ThreadS
         }
         let neuron_start = thread_rng().gen_range(0.0..2.0) > 1.0;
         if neuron_start {
+            println!("mcts start");
             game.set_mcts_lim(passes);
             game.find_mcts_and_make_best_move(true).await;
+        } else {
+            println!("deep start");
         }
         loop {
             let finish = game.position_history.borrow_mut().finish_check();
