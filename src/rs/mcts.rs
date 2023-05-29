@@ -405,13 +405,14 @@ impl McTree {
         let node = self.root.clone();
         if self.root.borrow().childs.len() > 0 {
             self.root.borrow().childs.iter().max_by(|a, b|
+                a.borrow().N.cmp(&b.borrow().N)
                 // if u(a.borrow().N, a.borrow().NN, &node) < u(b.borrow().N, b.borrow().NN, &node) {
                 //     Ordering::Less
                 // } else {
                 //     Ordering::Greater
                 // }
-                if u_min(&a.borrow(), &self.root) <
-                    u_min(&b.borrow(), &self.root) { Ordering::Less } else { Ordering::Greater }
+                // if u_min(&a.borrow(), &self.root) <
+                //     u_min(&b.borrow(), &self.root) { Ordering::Less } else { Ordering::Greater }
             ).unwrap().clone()
         } else {
             panic!("no childs")
