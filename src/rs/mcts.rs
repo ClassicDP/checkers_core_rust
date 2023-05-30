@@ -13,6 +13,7 @@ use crate::piece::Piece;
 use serde::Deserialize;
 use std::iter::Iterator;
 use std::sync::{Arc, Mutex, RwLock};
+use std::thread;
 use dashmap::DashMap;
 use js_sys::Map;
 use crate::cache_db::CacheDb;
@@ -288,8 +289,8 @@ impl McTree {
             {
                 // let n = node.borrow().childs.iter()
                 //     .fold(0, |acc, x| acc + x.borrow().N) as f64;
-                1.4 * f64::sqrt(f64::ln((node.borrow().N) as f64) / (N as f64 + 1.0))
-                // 2.0*f64::powi(f64::sqrt(node.borrow().N as f64) / (N as f64 + 1.0), 2)
+                // 2.4 * f64::sqrt(f64::ln((node.borrow().N) as f64) / (N as f64 + 1.0))
+                2.0 * f64::powi(f64::sqrt(node.borrow().N as f64) / (N as f64 + 1.0), 2)
                 // 2.0 * f64::sqrt(
                 //     // node.borrow().childs.iter().fold(0, |acc, x|acc+x.borrow().N) as f64
                 //     node.borrow().N as f64
@@ -302,7 +303,6 @@ impl McTree {
         };
         let u_min = |child: &Node, node: &Rc<RefCell<Node>>| {
             // child.N as f64
-            // println!("{} {}", child.W as f64 / (child.N as f64 + 1.0), u(child.N, node));
             child.W as f64 / (child.N as f64 + 1.0) - u(child.N, node)
         };
         let w_n = |a: &Rc<RefCell<Node>>| a.borrow().W as f64 / (1.0 + a.borrow().N as f64);
@@ -345,7 +345,7 @@ impl McTree {
             loop {
                 pass += 1;
                 node.borrow_mut().N += 1;
-                if !update_from_cache(&mut node) &&  self.cache.0.read().unwrap().as_ref().unwrap().get(
+                if !update_from_cache(&mut node) && self.cache.0.read().unwrap().as_ref().unwrap().get(
                     &track.last().unwrap().borrow_mut().get_key()).is_none()
                     && node.borrow().N > 200 {
                     let item =
@@ -406,10 +406,11 @@ impl McTree {
                                              _ => { 0 }
                                          };
                                          // let first =
-                                         //     if track[0].borrow().pos_mov.borrow().pos.next_move == Some(White) { 1 } else { -1 };
-                                         let par =
-                                             if node.borrow().pos_mov.borrow().pos.next_move == Some(White) { -1 } else { 1 };
-                                         fr
+                                         //     if track.last().unwrap()
+                                         //         .borrow().pos_mov.borrow().pos.next_move == Some(White) { -1 } else { 1 };
+                                         // let par =
+                                         //     if track.len() % 2 == 0 { 1 } else { -1 };
+fr
                                      }, &mut track, &self.history, hist_len, &self.cache);
                     break;
                 }
@@ -420,16 +421,21 @@ impl McTree {
             panic!("finish achieved")
         }
         if self.root.borrow().childs.len() > 0 {
-            self.root.borrow().childs.values().max_by(|a, b|
+            println!("_______");
+            let best = self.root.borrow().childs.values().max_by(|a, b|
                 // a.borrow().N.cmp(&b.borrow().N)
                 // if u(a.borrow().N, a.borrow().NN, &node) < u(b.borrow().N, b.borrow().NN, &node) {
                 //     Ordering::Less
                 // } else {
                 //     Ordering::Greater
                 // }
+
                 if u_min(&a.borrow(), &self.root) <
                     u_min(&b.borrow(), &self.root) { Ordering::Less } else { Ordering::Greater }
-            ).unwrap().clone()
+            ).unwrap().clone();
+            println!("{:?} {} {}", thread::current().id(), best.borrow().W as f64 / (best.borrow().N as f64 + 1.0),
+                     u(best.borrow().N, &self.root));
+            best
         } else {
             panic!("no childs")
         }
