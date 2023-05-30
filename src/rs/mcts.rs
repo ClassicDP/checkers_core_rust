@@ -302,7 +302,7 @@ impl McTree {
         };
         let u_min = |child: &Node, node: &Rc<RefCell<Node>>| {
             // child.N as f64
-            println!("{} {}", child.W as f64 / (child.N as f64 + 1.0), u(child.N, node));
+            // println!("{} {}", child.W as f64 / (child.N as f64 + 1.0), u(child.N, node));
             child.W as f64 / (child.N as f64 + 1.0) - u(child.N, node)
         };
         let w_n = |a: &Rc<RefCell<Node>>| a.borrow().W as f64 / (1.0 + a.borrow().N as f64);
@@ -378,7 +378,11 @@ impl McTree {
                 if node.borrow().N > 200 {
                     if self.cache.0.read().unwrap().as_ref().unwrap().get(&parent_node.borrow_mut().get_key()).is_none() {
                         let cache_item = CacheItem::from_node(&mut *node.borrow_mut());
-                        self.cache.0.read().unwrap().as_ref().unwrap().insert(cache_item).await;
+                        let item =
+                            self.cache.0.read().unwrap().as_ref().unwrap().get(&cache_item.key);
+                        if item.is_none() || node.borrow().N - item.unwrap().read().unwrap().quality.N > 20 {
+                            self.cache.0.read().unwrap().as_ref().unwrap().insert(cache_item).await;
+                        }
                     }
                 }
                 node.borrow_mut().N -= 1;
@@ -417,8 +421,6 @@ impl McTree {
         if self.root.borrow().finish.is_some() {
             panic!("finish achieved")
         }
-        let node = self.root.clone();
-        println!("---------------");
         if self.root.borrow().childs.len() > 0 {
             self.root.borrow().childs.values().max_by(|a, b|
                 // a.borrow().N.cmp(&b.borrow().N)
