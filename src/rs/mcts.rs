@@ -380,7 +380,7 @@ impl McTree {
                         let cache_item = CacheItem::from_node(&mut *node.borrow_mut());
                         let item =
                             self.cache.0.read().unwrap().as_ref().unwrap().get(&cache_item.key);
-                        if item.is_none() || node.borrow().N - item.unwrap().read().unwrap().quality.N > 20 {
+                        if item.is_none() || node.borrow().N - item.unwrap().read().unwrap().quality.N > 1 {
                             self.cache.0.read().unwrap().as_ref().unwrap().insert(cache_item).await;
                         }
                     }
