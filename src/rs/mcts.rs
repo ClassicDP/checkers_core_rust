@@ -341,6 +341,7 @@ impl McTree {
 
         while pass < max_passes && self.root.borrow().finish.is_none() {
             let mut node = self.root.clone();
+            track.push(node.clone());
             loop {
                 pass += 1;
                 node.borrow_mut().N += 1;
