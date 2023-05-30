@@ -317,6 +317,7 @@ impl McTree {
                 let it = item.read().unwrap();
                 if node.borrow().N < it.quality.N {
                     node.borrow_mut().N = it.quality.N;
+                    node.borrow_mut().W = it.quality.W;
                     for x in &it.childs {
                         if let Some(child) = node.borrow_mut().childs.get_mut(&x.0) {
                             child.borrow_mut().N = x.1.N;
