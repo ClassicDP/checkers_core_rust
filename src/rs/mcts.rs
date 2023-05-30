@@ -372,7 +372,7 @@ impl McTree {
                     } else {
                         let b_node = node.borrow();
                         let z_ch: Vec<_> =
-                            b_node.childs.values().clone().filter(|x| x.borrow().N < 10).collect();
+                            b_node.childs.values().clone().filter(|x| x.borrow().N < 1).collect();
                         if z_ch.len() > 0 {
                             z_ch[rand::thread_rng().gen_range(0..z_ch.len())].clone()
                         } else {
