@@ -375,9 +375,11 @@ impl McTree {
 
 
                 node.borrow_mut().N += 1;
-                if node.borrow().N > 100 {
-                    let cache_item = CacheItem::from_node(&mut *parent_node.borrow_mut());
-                    self.cache.0.read().unwrap().as_ref().unwrap().insert(cache_item).await;
+                if node.borrow().N > 200 {
+                    if self.cache.0.read().unwrap().as_ref().unwrap().get(&parent_node.borrow_mut().get_key()).is_none() {
+                        let cache_item = CacheItem::from_node(&mut *node.borrow_mut());
+                        self.cache.0.read().unwrap().as_ref().unwrap().insert(cache_item).await;
+                    }
                 }
                 node.borrow_mut().N -= 1;
 
@@ -442,6 +444,6 @@ impl McTree {
     }
 
     pub fn tree_childs(&self) -> Vec<Rc<RefCell<Node>>> {
-        self.root.borrow().childs.values().map(|x|x.clone()).collect::<Vec<_>>()
+        self.root.borrow().childs.values().map(|x| x.clone()).collect::<Vec<_>>()
     }
 }
