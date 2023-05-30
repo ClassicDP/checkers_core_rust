@@ -74,7 +74,6 @@ impl PositionWN {
 pub struct Node {
     pub W: i64,
     pub N: i64,
-    pub NN: i64,
     pub average_game_len: f64,
     pub finish: Option<FinishType>,
     pub passed: bool,
@@ -87,7 +86,6 @@ impl Node {
         Node {
             W: 0,
             N: 0,
-            NN: 0,
             average_game_len: 0.0,
             finish: None,
             passed: false,
@@ -136,7 +134,7 @@ pub struct OldCacheItem {
 pub struct CacheItem {
     key: VectorPosition,
     quality: Quality,
-    childs: HashMap<VectorPosition, Quality>,
+    childs: Vec<(VectorPosition, Quality)>,
 }
 
 impl CacheItem {
@@ -148,7 +146,7 @@ impl CacheItem {
         CacheItem {
             key: node.get_key(),
             quality: Quality { N: node.N, W: node.W },
-            childs: HashMap::from_iter(node.childs.iter().map(|(_, x)| {
+            childs: Vec::from_iter(node.childs.iter().map(|(_, x)| {
                 let key = x.borrow_mut().get_key();
                 let y = x.borrow();
                 (key, Quality { N: y.N, W: y.W })
@@ -189,7 +187,6 @@ impl McTree {
             root: Rc::new(RefCell::new(Node {
                 W: 0,
                 N: 0,
-                NN: 0,
                 average_game_len: 0.0,
                 finish: None,
                 passed: false,
@@ -310,13 +307,23 @@ impl McTree {
         };
         let w_n = |a: &Rc<RefCell<Node>>| a.borrow().W as f64 / (1.0 + a.borrow().N as f64);
 
-        let mut check_in_cache = |node: &Rc<RefCell<Node>>, child: &Rc<RefCell<Node>>, nn: i64| {
+        let mut check_in_cache = |node: &mut Rc<RefCell<Node>>| {
             let cache_item = CacheItem::from_node(&mut *node.borrow_mut());
             let key = cache_item.key();
             let cache = self.cache.0.read().unwrap();
             let item_val = cache.as_ref().unwrap().get(&key);
             if let Some(item) = &item_val {
                 cached_passes += 1;
+                let it = item.read().unwrap();
+                if node.borrow().N < it.quality.N {
+                    node.borrow_mut().N = it.quality.N;
+                    for x in &it.childs {
+                        if let Some(child) = node.borrow_mut().childs.get_mut(&x.0) {
+                            child.borrow_mut().N = x.1.N;
+                            child.borrow_mut().W = x.1.W;
+                        }
+                    }
+                }
                 // if node.borrow_mut().N < item.read().unwrap().quality.node.N {
                 //     node.borrow_mut().N = item.read().unwrap().quality.node.N;
                 //     node.borrow_mut().W = item.read().unwrap().quality.node.W;
@@ -332,7 +339,7 @@ impl McTree {
             let mut node = self.root.clone();
             loop {
                 pass += 1;
-                let parent_node = node.clone();
+                let mut parent_node = node.clone();
                 node.borrow_mut().N += 1;
                 let nn = node.borrow().N;
                 node = {
@@ -364,22 +371,13 @@ impl McTree {
                     }
                 };
 
-                check_in_cache(&parent_node, &node, nn);
+                check_in_cache(&mut parent_node);
 
 
                 node.borrow_mut().N += 1;
-                if node.borrow().N > 1000000 {
+                if node.borrow().N > 100 {
                     let cache_item = CacheItem::from_node(&mut *parent_node.borrow_mut());
                     self.cache.0.read().unwrap().as_ref().unwrap().insert(cache_item).await;
-                    // let key = cache_item.key();
-                    // let ch_node = {
-                    //     let cache = self.cache.0.read().unwrap();
-                    //     cache.as_ref().unwrap().get(&key)
-                    // };
-                    // if ch_node.is_none() || (node.borrow().N -
-                    //     ch_node.unwrap().read().unwrap().quality.child.N > 10) {
-                    //     self.cache.0.read().unwrap().as_ref().unwrap().insert(cache_item).await;
-                    // }
                 }
                 node.borrow_mut().N -= 1;
 
