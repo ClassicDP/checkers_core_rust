@@ -289,7 +289,7 @@ impl McTree {
             {
                 // let n = node.borrow().childs.iter()
                 //     .fold(0, |acc, x| acc + x.borrow().N) as f64;
-                4.0 * f64::sqrt(f64::ln((node.borrow().N) as f64) / (N as f64 + 1.0))
+                2.0 * f64::sqrt(f64::ln((node.borrow().N) as f64) / (N as f64 + 1.0))
                 // 2.0 * f64::powi(f64::sqrt(node.borrow().N as f64) / (N as f64 + 1.0), 2)
                 // 2.0 * f64::sqrt(
                 //     // node.borrow().childs.iter().fold(0, |acc, x|acc+x.borrow().N) as f64
