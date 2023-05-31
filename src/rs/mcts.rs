@@ -345,7 +345,7 @@ impl McTree {
             loop {
                 pass += 1;
                 node.borrow_mut().N += 1;
-                if !update_from_cache(&mut node) && node.borrow().N > 200 && track.len() % 2 == 1 {
+                if !update_from_cache(&mut node) && node.borrow().N > 200000 && track.len() % 2 == 1 {
                     let item =
                         self.cache.0.read().unwrap().as_ref().unwrap().get(&node.borrow_mut().get_key());
                     if item.is_none() || node.borrow().N - item.unwrap().read().unwrap().quality.N > 1 {
@@ -387,6 +387,9 @@ impl McTree {
                 let hist_finish = self.history.borrow_mut().push_rc(node.borrow().pos_mov.clone());
                 track.push(node.clone());
                 // if finish achieved
+                if hist_finish.is_none() && node.borrow().finish.is_some() {
+                    panic!("finish check error")
+                }
                 if let Some(finish) = hist_finish
                 // {
                 // if hist_finish.is_some() { hist_finish.clone() } else {
@@ -404,11 +407,11 @@ impl McTree {
                                              _ => { 0 }
                                          };
                                          let first =
-                                             if track[0].borrow().pos_mov.borrow().pos.next_move
-                                                 == Some(White) { 1 } else { -1 };
-                                         let par =
-                                             if track.len() % 2 == 0 { 1 } else { -1 };
-                                         fr * par * first
+                                             if node.borrow_mut().pos_mov.borrow().pos.next_move
+                                                 == Some(White) { -1 } else { 1 };
+                                         // let par =
+                                         //     if track.len() % 2 == 0 { 1 } else { -1 };
+                                         fr * first
                                      }, &mut track, &self.history, hist_len, &self.cache);
                     break;
                 }
