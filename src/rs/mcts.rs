@@ -338,7 +338,9 @@ impl McTree {
             }
             ok
         };
-
+        #[derive(Debug)]
+        struct Res {bw: i32, ww: i32, d: i32};
+        let mut res: Res = Res{bw: 0, ww: 0, d: 0};
         while pass < max_passes && self.root.borrow().finish.is_none() {
             let mut node = self.root.clone();
             track.push(node.clone());
@@ -402,9 +404,9 @@ impl McTree {
                     node.borrow_mut().passed = true;
                     back_propagation({
                                          let fr = match finish {
-                                             FinishType::WhiteWin => { 1 }
-                                             FinishType::BlackWin => { -1 }
-                                             _ => { 0 }
+                                             FinishType::WhiteWin => { res.ww+=1; 1}
+                                             FinishType::BlackWin => { res.bw+=1; -1}
+                                             _ => { res.d+=1; 0}
                                          };
                                          let first =
                                              if node.borrow_mut().pos_mov.borrow().pos.next_move
@@ -434,8 +436,9 @@ impl McTree {
                 if u_min(&a.borrow(), &self.root) <
                     u_min(&b.borrow(), &self.root) { Ordering::Less } else { Ordering::Greater }
             ).unwrap().clone();
-            println!("{:?} {} {}", thread::current().id(), best.borrow().W as f64 / (best.borrow().N as f64 + 1.0),
-                     u(best.borrow().N, &self.root));
+            println!("{:?} {:?} {} {} {:?}", thread::current().id(),
+                     if self.history.borrow().list.len() % 2 ==0 {Color::White} else {Black},
+                     best.borrow().W as f64 / (best.borrow().N as f64 + 1.0), u(best.borrow().N, &self.root), res);
             best
         } else {
             panic!("no childs")
