@@ -321,7 +321,7 @@ impl McTree {
                     node.borrow_mut().N = it.quality.N;
                     node.borrow_mut().W = it.quality.W;
                     for x in &it.childs {
-                        if let Some(child) = node.borrow_mut().childs.get(&x.0) {
+                        if let Some(child) = node.borrow_mut().childs.get_mut(&x.0) {
                             child.borrow_mut().N = x.1.N;
                             child.borrow_mut().W = x.1.W;
                         }
