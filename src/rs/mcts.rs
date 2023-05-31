@@ -345,7 +345,7 @@ impl McTree {
             loop {
                 pass += 1;
                 node.borrow_mut().N += 1;
-                if !update_from_cache(&mut node) && node.borrow().N > 200000 && track.len() % 2 == 1 {
+                if !update_from_cache(&mut node) && node.borrow().N > 200 && track.len() % 2 == 1 {
                     let item =
                         self.cache.0.read().unwrap().as_ref().unwrap().get(&node.borrow_mut().get_key());
                     if item.is_none() || node.borrow().N - item.unwrap().read().unwrap().quality.N > 1 {
