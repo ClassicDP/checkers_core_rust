@@ -249,9 +249,9 @@ pub fn random_game_test() {
 #[tokio::main]
 pub async fn main() {
     let arg = std::env::args().collect::<Vec<_>>();
-    let mut depth = 5;
-    let mut threads_q: usize = 4;
-    let mut cut_every: usize = 100;
+    let mut depth = 6;
+    let mut threads_q: usize = 1;
+    let mut cut_every: usize = 100000;
     let mut pass_q: usize = 300_000;
     println!("{:?}", arg);
     let score: ThreadScore = Arc::new(Mutex::new(Score { d: 0, m: 0 }));

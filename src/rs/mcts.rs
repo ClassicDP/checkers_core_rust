@@ -107,10 +107,8 @@ impl Node {
                 RefCell::new(Node::new(base_p.make_move_and_get_position(mov))));
             if {
                 let child = self.childs.get(&node.borrow_mut().get_key());
-                if child.is_none() ||
-                    child.unwrap().borrow().pos_mov.borrow().mov != node.borrow().pos_mov.borrow().mov {
-                    true
-                } else { false }
+                child.is_none() ||
+                    child.unwrap().borrow().pos_mov.borrow().mov != node.borrow().pos_mov.borrow().mov
             } {
                 self.childs.insert(node.borrow_mut().get_key(), node.clone());
             }
@@ -355,11 +353,19 @@ impl McTree {
 
                 update_from_cache(&mut node);
 
+                if node.borrow().N > 100 {
+                    let item =
+                        self.cache.0.read().unwrap().as_ref().unwrap().get(&node.borrow_mut().get_key());
+                    if item.is_none() || node.borrow().N - item.unwrap().read().unwrap().quality.N > 1 {
+                        let cache_item = CacheItem::from_node(&mut *node.borrow_mut());
+                        self.cache.0.read().unwrap().as_ref().unwrap().insert(cache_item).await;
+                    }
+                }
+
 
                 node = {
                     // node.borrow_mut().expand();
-                    let mut pos_mov = node.borrow().pos_mov.borrow().clone();
-                    let move_list = pos_mov.pos.get_move_list_cached_random_sort();
+                    let move_list = node.borrow_mut().pos_mov.borrow_mut().pos.get_move_list_cached_random_sort();
                     if node.borrow().childs.len() < move_list.as_ref().as_ref().unwrap().list.len() {
                         let i = node.borrow().childs.len();
                         let x = &move_list.as_ref().as_ref().unwrap().list[i];
@@ -400,10 +406,6 @@ impl McTree {
                 //     }
                 // }
                 {
-
-
-
-
                     node.borrow_mut().finish = Some(finish.clone());
                     node.borrow_mut().passed = true;
                     back_propagation({
@@ -438,13 +440,8 @@ impl McTree {
         }
         if self.root.borrow().childs.len() > 0 {
             println!("_______");
-            let node = self.root.clone();
-            let item =
-                self.cache.0.read().unwrap().as_ref().unwrap().get(&node.borrow_mut().get_key());
-            if item.is_none() || node.borrow().N - item.unwrap().read().unwrap().quality.N > 1 {
-                let cache_item = CacheItem::from_node(&mut *node.borrow_mut());
-                self.cache.0.read().unwrap().as_ref().unwrap().insert(cache_item).await;
-            }
+
+
             let best = self.root.borrow().childs.values().max_by(|a, b|
                 // a.borrow().N.cmp(&b.borrow().N)
                 // if u(a.borrow().N, a.borrow().NN, &node) < u(b.borrow().N, b.borrow().NN, &node) {

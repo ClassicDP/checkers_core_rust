@@ -168,11 +168,7 @@ impl Position {
     }
 
     pub fn get_move_list_cached(&mut self) -> Arc<Option<MoveList>> {
-        if self.move_list.is_none() {
-            let move_li = self.get_move_list(false);
-            self.move_list = Arc::new(Option::from(move_li));
-        }
-        self.move_list.clone()
+        self.get_move_list_cached_random_sort()
     }
     pub fn get_move_list_cached_random_sort(&mut self) -> Arc<Option<MoveList>> {
         if self.move_list.is_none() {
