@@ -339,22 +339,22 @@ impl McTree {
             ok
         };
         #[derive(Debug)]
-        struct Res {bw: i32, ww: i32, d: i32};
-        let mut res: Res = Res{bw: 0, ww: 0, d: 0};
+        struct Res {
+            bw: i32,
+            ww: i32,
+            d: i32,
+        }
+        ;
+        let mut res: Res = Res { bw: 0, ww: 0, d: 0 };
         while pass < max_passes && self.root.borrow().finish.is_none() {
             let mut node = self.root.clone();
             track.push(node.clone());
             loop {
                 pass += 1;
                 node.borrow_mut().N += 1;
-                if track.len() % 2 == 1 && !update_from_cache(&mut node) && node.borrow().N > 200 {
-                    let item =
-                        self.cache.0.read().unwrap().as_ref().unwrap().get(&node.borrow_mut().get_key());
-                    if item.is_none() || node.borrow().N - item.unwrap().read().unwrap().quality.N > 1 {
-                        let cache_item = CacheItem::from_node(&mut *node.borrow_mut());
-                        self.cache.0.read().unwrap().as_ref().unwrap().insert(cache_item).await;
-                    }
-                }
+
+                update_from_cache(&mut node);
+
 
                 node = {
                     // node.borrow_mut().expand();
@@ -400,13 +400,26 @@ impl McTree {
                 //     }
                 // }
                 {
+
+
+
+
                     node.borrow_mut().finish = Some(finish.clone());
                     node.borrow_mut().passed = true;
                     back_propagation({
                                          let fr = match finish {
-                                             FinishType::WhiteWin => { res.ww+=1; 1}
-                                             FinishType::BlackWin => { res.bw+=1; -1}
-                                             _ => { res.d+=1; 0}
+                                             FinishType::WhiteWin => {
+                                                 res.ww += 1;
+                                                 1
+                                             }
+                                             FinishType::BlackWin => {
+                                                 res.bw += 1;
+                                                 -1
+                                             }
+                                             _ => {
+                                                 res.d += 1;
+                                                 0
+                                             }
                                          };
                                          let first =
                                              if node.borrow_mut().pos_mov.borrow().pos.next_move
@@ -425,6 +438,13 @@ impl McTree {
         }
         if self.root.borrow().childs.len() > 0 {
             println!("_______");
+            let node = self.root.clone();
+            let item =
+                self.cache.0.read().unwrap().as_ref().unwrap().get(&node.borrow_mut().get_key());
+            if item.is_none() || node.borrow().N - item.unwrap().read().unwrap().quality.N > 1 {
+                let cache_item = CacheItem::from_node(&mut *node.borrow_mut());
+                self.cache.0.read().unwrap().as_ref().unwrap().insert(cache_item).await;
+            }
             let best = self.root.borrow().childs.values().max_by(|a, b|
                 // a.borrow().N.cmp(&b.borrow().N)
                 // if u(a.borrow().N, a.borrow().NN, &node) < u(b.borrow().N, b.borrow().NN, &node) {
@@ -437,7 +457,7 @@ impl McTree {
                     u_min(&b.borrow(), &self.root) { Ordering::Less } else { Ordering::Greater }
             ).unwrap().clone();
             println!("{:?} {:?} {} {} {:?}", thread::current().id(),
-                     if self.history.borrow().list.len() % 2 ==0 {Color::White} else {Black},
+                     if self.history.borrow().list.len() % 2 == 0 { Color::White } else { Black },
                      best.borrow().W as f64 / (best.borrow().N as f64 + 1.0), u(best.borrow().N, &self.root), res);
             best
         } else {
