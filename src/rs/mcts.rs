@@ -2,7 +2,7 @@ use std::cell::{Cell, RefCell};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::Write;
+use std::io::{BufWriter, Write};
 use std::rc::Rc;
 use crate::position::{Position, TuplePositionKey};
 use crate::PositionHistory::{FinishType, PositionAndMove, PositionHistory};
@@ -203,9 +203,9 @@ impl Cache {
             vv.0.extend(x.get_item().write().unwrap().to_vector_list().0);
         }
         println!("list size {}", vv.0.len());
-        let json_data = serde_json::to_string(&vv.0)?;
-        let mut file = File::create(f_name)?;
-        file.write_all(json_data.as_bytes())?;
+        let file = File::create(f_name)?;
+        let buffered_file = BufWriter::new(file);
+        serde_json::to_writer(buffered_file, &vv.0)?;
         Ok(())
     }
 }

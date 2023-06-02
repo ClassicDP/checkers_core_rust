@@ -5,6 +5,8 @@
 cache.json
 cache.json.bak
 /src/neural-learning/vectors.json
+vectors.json
+
 
 # Logs
 logs
