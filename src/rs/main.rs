@@ -253,18 +253,20 @@ pub async fn main() {
     let mut threads_q: usize = 1;
     let mut cut_every: usize = 100000;
     let mut pass_q: usize = 300_000;
+    let mut item_update_every = 100;
     println!("{:?}", arg);
     let score: ThreadScore = Arc::new(Mutex::new(Score { d: 0, m: 0 }));
     let pos = arg.iter().position(|x| *x == "+++".to_string());
-    if pos.is_some() && arg.len() - pos.unwrap() == 5 {
-        [threads_q, cut_every, pass_q, depth] = <[usize; 4]>::try_from(
+    if pos.is_some() && arg.len() - pos.unwrap() == 6 {
+        [threads_q, item_update_every, cut_every, pass_q, depth] = <[usize; 5]>::try_from(
             arg[pos.unwrap() + 1..].iter().map(|x| x.parse().unwrap()).collect::<Vec<_>>()).unwrap();
-        println!("set threads_q: {},  cut_every: {}, pass_q: {}, depth: {}", threads_q, cut_every, pass_q, depth);
+        println!("set threads_q: {},  item_update_every {}, cut_every: {}, pass_q: {}, depth: {}",
+                 threads_q, item_update_every, cut_every, pass_q, depth);
     }
     let cache_db = Cache(Arc::new(RwLock::new(Some(CacheDb::new(
         CacheItem::key, "checkers".to_string(),
         "nodes".to_string(), cut_every as u64,
-        10000, cut_every as u16).await))));
+        item_update_every as u16, cut_every as u16).await))));
     cache_db.0.write().unwrap().as_mut().unwrap().init_database().await;
     // cache_db.0.write().unwrap().as_mut().unwrap().read_collection::<OldCacheItem>(Some(|x|{
     //     CacheItem::from_pos_wn(&x.node.lock().unwrap().deref(), x.child.lock().unwrap().deref())
