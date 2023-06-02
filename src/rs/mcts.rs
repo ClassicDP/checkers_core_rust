@@ -1,6 +1,8 @@
 use std::cell::{Cell, RefCell};
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::fs::File;
+use std::io::Write;
 use std::rc::Rc;
 use crate::position::{Position, TuplePositionKey};
 use crate::PositionHistory::{FinishType, PositionAndMove, PositionHistory};
@@ -129,20 +131,30 @@ pub struct OldCacheItem {
     pub child: Arc<Mutex<PositionWN>>,
 }
 
+
+#[derive(Serialize)]
+pub struct NeuralVecList(Vec<Vec<f32>>);
+
+impl NeuralVecList {
+    fn push_many(&mut self, list: NeuralVecList) {
+        self.0.extend(list.0);
+    }
+}
+
 #[derive(Serialize, Debug, Clone, Deserialize)]
-pub struct CacheItem {
+pub struct NodeCacheItem {
     key: VectorPosition,
     quality: Quality,
     childs: Vec<(VectorPosition, Quality)>,
 }
 
-impl CacheItem {
+impl NodeCacheItem {
     pub fn key(&self) -> VectorPosition {
         self.key.clone()
     }
 
-    pub fn from_node(node: &mut Node) -> CacheItem {
-        CacheItem {
+    pub fn from_node(node: &mut Node) -> NodeCacheItem {
+        NodeCacheItem {
             key: node.get_key(),
             quality: Quality { N: node.N, W: node.W },
             childs: Vec::from_iter(node.childs.iter().map(|(_, x)| {
@@ -151,6 +163,27 @@ impl CacheItem {
                 (key, Quality { N: y.N, W: y.W })
             })),
         }
+    }
+
+    pub fn to_vector_list(&self) -> NeuralVecList {
+        let mut v = vec![];
+        let mut res = NeuralVecList(vec![]);
+        v = self.key.0.iter().map(|x| *x as f32 / 3.0).collect::<Vec<_>>();
+        let next_move = v.pop().unwrap();
+        if next_move < 0.0 { v.reverse() }
+        for (ve, q) in &self.childs {
+            let mut v1 = ve.0.iter().map(|x| *x as f32 / 3.0).collect::<Vec<_>>();
+            let mut v = v.clone();
+            if v1.pop().unwrap() < 0.0 { v1.reverse() }
+            v.extend(v1);
+            v.push(next_move);
+            let q_u = 1.4 * f32::sqrt(f32::ln(self.quality.N as f32) / (1.0 + q.N as f32));
+            let q_v = (q.W as f32 / (q.N as f32 + 1.0) + 1.0) / 2.0;
+            v.push(q_u);
+            v.push(q_v);
+            res.0.push(v);
+        }
+        res
     }
 }
 
@@ -161,7 +194,20 @@ struct Quality {
 }
 
 #[derive(Clone, Default)]
-pub struct Cache(pub Arc<RwLock<Option<CacheDb<VectorPosition, CacheItem>>>>);
+pub struct Cache(pub Arc<RwLock<Option<CacheDb<VectorPosition, NodeCacheItem>>>>);
+
+impl Cache {
+    pub fn to_file(&self, f_name: String) -> std::io::Result<()> {
+        let mut vv = NeuralVecList(vec![vec![]]);
+        for x in self.0.write().unwrap().as_mut().unwrap().iterator() {
+            vv.0.extend(x.value().get_item().write().unwrap().to_vector_list().0);
+        }
+        let json_data = serde_json::to_string(&vv)?;
+        let mut file = File::create(f_name)?;
+        file.write_all(json_data.as_bytes())?;
+        Ok(())
+    }
+}
 
 // impl Default for Cache {
 //     fn default() -> Self {
@@ -357,7 +403,7 @@ impl McTree {
                     let item =
                         self.cache.0.read().unwrap().as_ref().unwrap().get(&node.borrow_mut().get_key());
                     if item.is_none() || node.borrow().N - item.unwrap().read().unwrap().quality.N > 1 {
-                        let cache_item = CacheItem::from_node(&mut *node.borrow_mut());
+                        let cache_item = NodeCacheItem::from_node(&mut *node.borrow_mut());
                         self.cache.0.read().unwrap().as_ref().unwrap().insert(cache_item).await;
                     }
                 }

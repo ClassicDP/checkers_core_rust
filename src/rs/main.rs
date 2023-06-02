@@ -7,7 +7,7 @@ use rayon::prelude::IntoParallelRefIterator;
 use crate::cache_map::CacheMap;
 use crate::color::Color;
 use crate::game::Game;
-use crate::mcts::{Cache, CacheItem, Node, OldCacheItem, PositionWN};
+use crate::mcts::{Cache, NodeCacheItem, Node, OldCacheItem, PositionWN};
 use crate::piece::Piece;
 use rayon::prelude::*;
 use std::iter::Iterator;
@@ -270,7 +270,7 @@ pub async fn main() {
                  threads_q, item_update_every, cut_every, pass_q, depth);
     }
     let cache_db = Cache(Arc::new(RwLock::new(Some(CacheDb::new(
-        CacheItem::key, "checkers".to_string(),
+        NodeCacheItem::key, "checkers".to_string(),
         "nodes".to_string(), cut_every as u64,
         item_update_every as u16, cut_every as u16).await))));
     cache_db.0.write().unwrap().as_mut().unwrap().init_database().await;

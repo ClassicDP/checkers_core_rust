@@ -1,6 +1,7 @@
 use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
 use std::{fmt, thread};
+use std::collections::hash_map::RandomState;
 use std::ops::Deref;
 use std::sync::{Arc, Condvar, Mutex, RwLock, MutexGuard, LockResult};
 use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
@@ -8,6 +9,8 @@ use std::thread::{ThreadId};
 use async_std::prelude::StreamExt;
 use dashmap::DashMap;
 use atomic_wait::{wait, wake_one, wake_all};
+use dashmap::iter::Iter;
+use dashmap::mapref::entry::Entry;
 use mongodb::bson::{Bson, doc, Document, oid::ObjectId, to_document};
 use mongodb::{bson, Client, Collection, Cursor};
 
@@ -166,6 +169,10 @@ impl<K, T> CacheDb<K, T>
         let database = client.database(&self.db_name);
         let collection = database.collection::<WrapItem<T>>(&self.collection_name);
         self.thread_dbc.insert(thread_id, collection);
+    }
+
+    pub fn iterator<'a>(&self) -> Iter<'a, K, WrapItem<T>, RandomState, DashMap<K, WrapItem<T>>> {
+        self.map.iter()
     }
 
     pub async fn drop_collection(&mut self) {
