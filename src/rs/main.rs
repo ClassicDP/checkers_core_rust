@@ -41,18 +41,18 @@ struct MoveAsQuite {
 
 pub fn init(game: &mut Game) {
     *game = Game::new(8);
-    // vec![0, 2, 4, 6, 9, 11, 13, 15, 16, 18, 20, 22].iter()
-    //     .for_each(|pos|
-    //         game.insert_piece(Piece::new(game.to_pack(*pos), Color::White, false)));
-    // vec![0, 2, 4, 6, 9, 11, 13, 15, 16, 18, 20, 22].iter().map(|x| 63 - x).collect::<Vec<_>>().iter()
-    //     .for_each(|pos|
-    //         game.insert_piece(Piece::new(game.to_pack(*pos), Color::Black, false)));
-    vec![0, 2, 4].iter()
+    vec![0, 2, 4, 6, 9, 11, 13, 15, 16, 18, 20, 22].iter()
         .for_each(|pos|
-            game.insert_piece(Piece::new(game.to_pack(*pos), Color::White, true)));
-    vec![15].iter().map(|x| 63 - x).collect::<Vec<_>>().iter()
+            game.insert_piece(Piece::new(game.to_pack(*pos), Color::White, false)));
+    vec![0, 2, 4, 6, 9, 11, 13, 15, 16, 18, 20, 22].iter().map(|x| 63 - x).collect::<Vec<_>>().iter()
         .for_each(|pos|
-            game.insert_piece(Piece::new(game.to_pack(*pos), Color::Black, true)));
+            game.insert_piece(Piece::new(game.to_pack(*pos), Color::Black, false)));
+    // vec![0, 2, 4].iter()
+    //     .for_each(|pos|
+    //         game.insert_piece(Piece::new(game.to_pack(*pos), Color::White, true)));
+    // vec![15].iter().map(|x| 63 - x).collect::<Vec<_>>().iter()
+    //     .for_each(|pos|
+    //         game.insert_piece(Piece::new(game.to_pack(*pos), Color::Black, true)));
     game.current_position.next_move = Option::from(Color::White);
     // vec![4].iter()
     //     .for_each(|pos|
@@ -100,7 +100,7 @@ pub async fn deep_mcts(mut cache: Cache, passes: i32, depth: i16, score: ThreadS
         if game.tree.is_some() {
             game.tree.as_mut().unwrap().set_cache(cache);
         }
-        let neuron_start = thread_rng().gen_range(0.0..2.0) > 0.0;
+        let neuron_start = thread_rng().gen_range(0.0..2.0) > 1.0;
         if neuron_start {
             println!("mcts start");
             game.set_mcts_lim(passes);
@@ -255,10 +255,10 @@ pub fn random_game_test() {
 #[tokio::main]
 pub async fn main() {
     let arg = std::env::args().collect::<Vec<_>>();
-    let mut depth = 4;
+    let mut depth = 6;
     let mut threads_q: usize = 8;
     let mut cut_every: usize = 100000;
-    let mut pass_q: usize = 1000_000;
+    let mut pass_q: usize = 200_000;
     let mut item_update_every = 100;
     println!("{:?}", arg);
     let score: ThreadScore = Arc::new(Mutex::new(Score { d: 0, m: 0 }));
