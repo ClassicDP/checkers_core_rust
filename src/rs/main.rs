@@ -262,6 +262,7 @@ pub async fn main() {
     let mut item_update_every = 100;
     println!("{:?}", arg);
     let score: ThreadScore = Arc::new(Mutex::new(Score { d: 0, m: 0 }));
+
     let pos = arg.iter().position(|x| *x == "+++".to_string());
     if pos.is_some() && arg.len() - pos.unwrap() == 6 {
         [threads_q, item_update_every, cut_every, pass_q, depth] = <[usize; 5]>::try_from(
@@ -278,6 +279,12 @@ pub async fn main() {
     //     CacheItem::from_pos_wn(&x.node.lock().unwrap().deref(), x.child.lock().unwrap().deref())
     // })).await;
     cache_db.0.write().unwrap().as_mut().unwrap().read_collection().await;
+    if let Some(i) = arg.iter().position(|x| *x == "-e".to_string()) {
+        println!("Export starting...");
+        cache_db.to_file(arg[i + 1].clone()).expect("Export error");
+        println!("Export finished");
+        return;
+    }
     let mut xx = vec![];
     for _ in 0..threads_q {
         let cache = cache_db.clone();

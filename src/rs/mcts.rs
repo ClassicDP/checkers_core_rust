@@ -168,11 +168,11 @@ impl NodeCacheItem {
     pub fn to_vector_list(&self) -> NeuralVecList {
         let mut v = vec![];
         let mut res = NeuralVecList(vec![]);
-        v = self.key.0.iter().map(|x| *x as f32 / 3.0).collect::<Vec<_>>();
-        let next_move = v.pop().unwrap();
+        v = self.key.0.iter().map(|x| f32::trunc(*x as f32 / 3.0 * 10.0) / 10.0).collect::<Vec<_>>();
+        let next_move = f32::trunc(v.pop().unwrap()*4.0);
         if next_move < 0.0 { v.reverse() }
         for (ve, q) in &self.childs {
-            let mut v1 = ve.0.iter().map(|x| *x as f32 / 3.0).collect::<Vec<_>>();
+            let mut v1 = ve.0.iter().map(|x| f32::trunc(*x as f32 / 3.0 * 10.0) / 10.0).collect::<Vec<_>>();
             let mut v = v.clone();
             if v1.pop().unwrap() < 0.0 { v1.reverse() }
             v.extend(v1);
@@ -198,11 +198,12 @@ pub struct Cache(pub Arc<RwLock<Option<CacheDb<VectorPosition, NodeCacheItem>>>>
 
 impl Cache {
     pub fn to_file(&self, f_name: String) -> std::io::Result<()> {
-        let mut vv = NeuralVecList(vec![vec![]]);
-        for x in self.0.write().unwrap().as_mut().unwrap().iterator() {
-            vv.0.extend(x.value().get_item().write().unwrap().to_vector_list().0);
+        let mut vv = NeuralVecList(vec![]);
+        for x in self.0.write().unwrap().as_mut().unwrap().get_map() {
+            vv.0.extend(x.get_item().write().unwrap().to_vector_list().0);
         }
-        let json_data = serde_json::to_string(&vv)?;
+        println!("list size {}", vv.0.len());
+        let json_data = serde_json::to_string(&vv.0)?;
         let mut file = File::create(f_name)?;
         file.write_all(json_data.as_bytes())?;
         Ok(())

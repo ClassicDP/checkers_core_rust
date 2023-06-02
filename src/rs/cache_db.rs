@@ -171,8 +171,8 @@ impl<K, T> CacheDb<K, T>
         self.thread_dbc.insert(thread_id, collection);
     }
 
-    pub fn iterator<'a>(&self) -> Iter<'a, K, WrapItem<T>, RandomState, DashMap<K, WrapItem<T>>> {
-        self.map.iter()
+    pub fn get_map(&self) -> &DashMap<K, WrapItem<T>> {
+        &self.map
     }
 
     pub async fn drop_collection(&mut self) {
