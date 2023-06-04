@@ -177,7 +177,7 @@ impl NodeCacheItem {
             if v1.pop().unwrap() < 0.0 { v1.reverse() }
             v.extend(v1);
             v.push(next_move);
-            let q_u = 1.4 * f32::sqrt(f32::ln(self.quality.N as f32) / (1.0 + q.N as f32));
+            let q_u = 1.4 * f32::sqrt(f32::ln(self.quality.N as f32)    / (1.0 + q.N as f32));
             let q_v = (q.W as f32 / (q.N as f32 + 1.0) + 1.0) / 2.0;
             v.push(q_u);
             v.push(q_v);
@@ -334,7 +334,11 @@ impl McTree {
             {
                 // let n = node.borrow().childs.iter()
                 //     .fold(0, |acc, x| acc + x.borrow().N) as f64;
-                2.0 * f64::sqrt(f64::ln((node.borrow().N) as f64) / (N as f64 + 1.0))
+                let mut NN = 0;
+                for x in node.borrow().childs.values() {
+                    NN += x.borrow().N;
+                }
+                2.0 * f64::sqrt(f64::ln((NN) as f64) / (N as f64 + 1.0))
                 // 2.0 * f64::powi(f64::sqrt(node.borrow().N as f64) / (N as f64 + 1.0), 2)
                 // 2.0 * f64::sqrt(
                 //     // node.borrow().childs.iter().fold(0, |acc, x|acc+x.borrow().N) as f64
@@ -500,9 +504,15 @@ impl McTree {
                 if u_min(&a.borrow(), &self.root) <
                     u_min(&b.borrow(), &self.root) { Ordering::Less } else { Ordering::Greater }
             ).unwrap().clone();
+            // for x in self.root.borrow().childs.values()
+            //  {
+            //      let (u,v) = (u(x.borrow().N, &self.root), x.borrow().W as f64 / (x.borrow().N as f64 + 1.0));
+            //     println!("u-v list:  {:?} {:?}",
+            //              (u, v), v-u);
+            // }
             println!("{:?} {:?} {} {} {:?}", thread::current().id(),
                      if self.history.borrow().list.len() % 2 == 0 { Color::White } else { Black },
-                     best.borrow().W as f64 / (best.borrow().N as f64 + 1.0), u(best.borrow().N, &self.root), res);
+                     u(best.borrow().N, &self.root), best.borrow().W as f64 / (best.borrow().N as f64 + 1.0),  res);
             best
         } else {
             panic!("no childs")

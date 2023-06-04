@@ -1,5 +1,46 @@
-import {MongoClient, Db, Collection, ObjectId} from 'mongodb';
+import {Collection, Db, MongoClient, ObjectId} from 'mongodb';
 import * as fs from "fs";
+
+
+interface Item {
+    key: number[];
+    quality: {
+        W: number;
+        N: number;
+    };
+    childs: [number[], { W: number; N: number }] [];
+}
+
+interface Node {
+    _id: {
+        $oid: string;
+    };
+    item: Item;
+    repetitions: number;
+}
+
+
+async function getCollection() {
+    const uri = 'mongodb://localhost:27017';
+    const client = new MongoClient(uri);
+
+    try {
+        await client.connect();
+
+        const database = client.db('checkers');
+        const collection = database.collection<Node>('nodes');
+
+        return await collection.find({}).toArray()
+
+    } catch (error) {
+        console.error('Ошибка при получении коллекции:', error);
+    } finally {
+        await client.close();
+    }
+}
+
+
+
 
 type Checker = {
     pos: number,
@@ -91,6 +132,22 @@ async function mapCollection(db: Db): Promise<number[][]> {
 }
 
 
+function readArrayFromFile(filePath: string): any[] {
+    try {
+        const fileContents = fs.readFileSync(filePath, 'utf-8');
+        const arrayData = JSON.parse(fileContents);
+        if (Array.isArray(arrayData)) {
+            return arrayData;
+        } else {
+            throw new Error('File does not contain an array');
+        }
+    } catch (error) {
+        console.error('Error reading array from file:', error);
+        return [];
+    }
+}
+
+
 async function main() {
     let db = await connectToMongo();
     let list = await mapCollection(db)
@@ -99,4 +156,33 @@ async function main() {
     fs.writeFileSync("vectors.json", JSON.stringify(list))
 }
 
-main().then(()=>console.log("finish"))
+let key = (x: Array<number>) => {
+    let s= ''
+    for (let i =0; i<32; i++) {
+        s+=(x[i]*10).toString();
+    }
+    return s
+}
+
+async function db() {
+    let v = await getCollection();
+    let vv =
+        v?.filter(x=>!!x.item.childs.find(x=>Math.abs(x[1].N)==0 && x[1].W!==0))
+    console.log(vv?vv[0]:undefined)
+}
+db().then()
+//
+//
+// let v = readArrayFromFile("../../vectors.json")
+// let x = v.filter(x=>x[66]==0)
+//
+// let map = new Map
+// x.forEach(it=> {
+//     if (!map.get(key(it))) {
+//         map.set(key(it), [])
+//     }
+// })
+// v.forEach(it=> map.get(key(it))?.push(it))
+// console.log(v.length)
+
+// main().then(()=>console.log("finish"))
