@@ -169,7 +169,7 @@ impl NodeCacheItem {
         let mut v = vec![];
         let mut res = NeuralVecList(vec![]);
         v = self.key.0.iter().map(|x| f32::trunc(*x as f32 / 3.0 * 10.0) / 10.0).collect::<Vec<_>>();
-        let next_move = f32::trunc(v.pop().unwrap()*4.0);
+        let next_move = f32::trunc(v.pop().unwrap() * 4.0);
         if next_move < 0.0 { v.reverse() }
         for (ve, q) in &self.childs {
             let mut v1 = ve.0.iter().map(|x| f32::trunc(*x as f32 / 3.0 * 10.0) / 10.0).collect::<Vec<_>>();
@@ -177,7 +177,7 @@ impl NodeCacheItem {
             if v1.pop().unwrap() < 0.0 { v1.reverse() }
             v.extend(v1);
             v.push(next_move);
-            let q_u = 1.4 * f32::sqrt(f32::ln(self.quality.N as f32)    / (1.0 + q.N as f32));
+            let q_u = 1.4 * f32::sqrt(f32::ln(self.quality.N as f32) / (1.0 + q.N as f32));
             let q_v = (q.W as f32 / (q.N as f32 + 1.0) + 1.0) / 2.0;
             v.push(q_u);
             v.push(q_v);
@@ -458,6 +458,7 @@ impl McTree {
                 // }
                 {
                     node.borrow_mut().finish = Some(finish.clone());
+                    node.borrow_mut().N += 1;
                     node.borrow_mut().passed = true;
                     back_propagation({
                                          let fr = match finish {
@@ -510,9 +511,9 @@ impl McTree {
             //     println!("u-v list:  {:?} {:?}",
             //              (u, v), v-u);
             // }
-            println!("{:?} {:?} {} {} {:?}", thread::current().id(),
-                     if self.history.borrow().list.len() % 2 == 0 { Color::White } else { Black },
-                     u(best.borrow().N, &self.root), best.borrow().W as f64 / (best.borrow().N as f64 + 1.0),  res);
+            // println!("{:?} {:?} {} {} {:?}", thread::current().id(),
+            //          if self.history.borrow().list.len() % 2 == 0 { Color::White } else { Black },
+            //          u(best.borrow().N, &self.root), best.borrow().W as f64 / (best.borrow().N as f64 + 1.0),  res);
             best
         } else {
             panic!("no childs")
