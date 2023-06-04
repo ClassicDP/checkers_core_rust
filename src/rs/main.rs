@@ -22,6 +22,7 @@ include!("lib.rs");
 pub struct Score {
     m: i32,
     d: i32,
+    z: i32,
 }
 
 pub type ThreadScore = Arc<Mutex<Score>>;
@@ -87,11 +88,10 @@ pub async fn deep_mcts(mut cache: Cache, passes: i32, depth: i16, score: ThreadS
         if (*finish == BlackWin && !neuron_start) ||
             (*finish == WhiteWin) && neuron_start {
             score.lock().unwrap().m += 1;
-        };
-        if (*finish == WhiteWin && !neuron_start) ||
+        } else if (*finish == WhiteWin && !neuron_start) ||
             (*finish == BlackWin) && neuron_start {
             score.lock().unwrap().d += 1;
-        };
+        } else { score.lock().unwrap().z += 1; }
     };
     let mut prev_tree_size = 0;
     loop {
@@ -134,9 +134,9 @@ pub async fn deep_mcts(mut cache: Cache, passes: i32, depth: i16, score: ThreadS
             let tree_size = game.tree.as_ref().unwrap().root.borrow().N;
             let thread_id = thread::current().id();
             let thread_id_str = format!("{:?}", thread_id);
-            let s= (tree_size + prev_tree_size) as f64;
-            if  s > 0.0 &&
-                f64::abs((tree_size as f64 - prev_tree_size as f64)/(s)) > 0.4 {
+            let s = (tree_size + prev_tree_size) as f64;
+            if s > 0.0 &&
+                f64::abs((tree_size as f64 - prev_tree_size as f64) / (s)) > 0.4 {
                 prev_tree_size = tree_size;
                 // println!("tree num {} hase size {}", thread_id_str, tree_size);
             }
@@ -261,7 +261,7 @@ pub async fn main() {
     let mut pass_q: usize = 200_000;
     let mut item_update_every = 100;
     println!("{:?}", arg);
-    let score: ThreadScore = Arc::new(Mutex::new(Score { d: 0, m: 0 }));
+    let score: ThreadScore = Arc::new(Mutex::new(Score { d: 0, m: 0, z: 0 }));
 
     let pos = arg.iter().position(|x| *x == "+++".to_string());
     if pos.is_some() && arg.len() - pos.unwrap() == 6 {
