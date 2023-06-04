@@ -491,7 +491,7 @@ impl McTree {
             panic!("finish achieved")
         }
         if self.root.borrow().childs.len() > 0 {
-            println!("_______");
+            // println!("_______");
 
 
             let best = self.root.borrow().childs.values().max_by(|a, b|
