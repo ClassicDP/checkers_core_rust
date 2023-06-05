@@ -178,7 +178,7 @@ impl NodeCacheItem {
             if v1.pop().unwrap() < 0.0 { v1.reverse() }
             v.extend(v1);
             v.push(next_move);
-            let q_u = 2.0 * f32::sqrt(f32::ln(NN as f32) / (1.0 + q.N as f32));
+            let q_u = 1.0 * f32::sqrt(f32::ln(NN as f32) / (1.0 + q.N as f32));
             let q_v = (q.W as f32 / (q.N as f32 + 1.0) + 1.0) / 2.0;
             v.push(q_u);
             v.push(q_v);
