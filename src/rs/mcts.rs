@@ -171,13 +171,14 @@ impl NodeCacheItem {
         v = self.key.0.iter().map(|x| f32::trunc(*x as f32 / 3.0 * 10.0) / 10.0).collect::<Vec<_>>();
         let next_move = f32::trunc(v.pop().unwrap() * 4.0);
         if next_move < 0.0 { v.reverse() }
+        let NN = self.childs.iter().fold(0, |_, x| x.1.N);
         for (ve, q) in &self.childs {
             let mut v1 = ve.0.iter().map(|x| f32::trunc(*x as f32 / 3.0 * 10.0) / 10.0).collect::<Vec<_>>();
             let mut v = v.clone();
             if v1.pop().unwrap() < 0.0 { v1.reverse() }
             v.extend(v1);
             v.push(next_move);
-            let q_u = 1.4 * f32::sqrt(f32::ln(self.quality.N as f32) / (1.0 + q.N as f32));
+            let q_u = 2.0 * f32::sqrt(f32::ln(NN as f32) / (1.0 + q.N as f32));
             let q_v = (q.W as f32 / (q.N as f32 + 1.0) + 1.0) / 2.0;
             v.push(q_u);
             v.push(q_v);
